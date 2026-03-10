@@ -1,0 +1,95 @@
+# 相机位置控制系统配置文件
+# 
+# 环境变量可覆盖以下配置：
+#   CAMERA_ENABLED, CAMERA_WIDTH, CAMERA_HEIGHT
+#   COMM_PORT, COMM_BAUDRATE
+#   WEB_PORT, WEB_HOST
+#   FACE_DB_PATH
+
+# 相机配置
+camera:
+  enabled: true
+  required: false          # 相机不可用时是否退出
+  type: "auto"             # 相机类型: "auto", "realsense", "orbbec"
+  
+  # RealSense D415 配置
+  realsense:
+    width: 1280
+    height: 720
+    fps: 30
+    enable_depth: true
+    serial_number: null    # 指定相机序列号（多相机时使用）
+  
+  # 奥比中光咪咕款配置
+  orbbec:
+    color:
+      width: 1920
+      height: 1080
+      fps: 30
+    depth:
+      width: 640
+      height: 480
+      fps: 30
+    align_mode: "D2C_HW"   # 深度对齐模式: "D2C_HW" (硬件), "D2C_SW" (软件)
+    depth_range:
+      min: 600             # 最小深度 (mm)
+      max: 8000            # 最大深度 (mm)
+  
+  # 向后兼容的通用配置（用于未指定类型时）
+  width: 1280
+  height: 720
+  fps: 30
+  enable_depth: true
+  serial_number: null
+
+# 串口通信配置 (STM32F407VET6)
+comm:
+  enabled: true
+  required: false
+  port: "/dev/ttyUSB0"     # Linux: /dev/ttyUSB0, Windows: COM3
+  baudrate: 115200
+  timeout: 1.0
+
+# 目标检测配置
+detection:
+  enabled: true
+  model_path: "models/yolov5s.engine"
+  confidence_threshold: 0.5
+  nms_threshold: 0.45
+  target_classes: []       # 空列表表示检测所有类别
+
+# 人脸识别配置
+face_recognition:
+  enabled: true
+  database_path: "face_database"
+  detection_threshold: 0.5
+  recognition_threshold: 0.6
+  backend: "auto"          # auto, insightface, face_recognition
+
+# 视觉伺服配置
+visual_servo:
+  enabled: true
+  center_tolerance: 30     # 居中容差（像素）
+  max_pan_speed: 30.0      # 最大水平速度（度/秒）
+  max_tilt_speed: 20.0     # 最大俯仰速度（度/秒）
+  max_rail_speed: 6.0      # 最大滑轨速度（mm/秒）[修正: 从 50.0 降低到 6.0 以匹配 STM32 限制]
+  prediction_enabled: true # 启用卡尔曼预测
+
+# 任务调度器配置
+scheduler:
+  enabled: true
+  default_path: null       # 默认路径配置文件
+
+# Web 服务配置
+web:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  enable_auth: false       # 启用身份认证
+  video_fps: 15
+  video_quality: 80
+  # SSL/TLS 配置
+  ssl:
+    enabled: false         # 启用 HTTPS
+    cert_file: "certs/cert.pem"   # 证书文件路径
+    key_file: "certs/key.pem"     # 私钥文件路径

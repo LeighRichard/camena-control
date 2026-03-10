@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相机位置控制系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #333;
+            margin-bottom: 16px;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            background: #2d5a27;
+        }
+        
+        .status-badge.error {
+            background: #8b2635;
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 16px;
+        }
+        
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .video-section {
+            background: #16213e;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .video-container {
+            position: relative;
+            background: #000;
+            aspect-ratio: 16/9;
+        }
+        
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px 12px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+        
+        .video-controls {
+            padding: 12px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .panel-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .position-display {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            text-align: center;
+        }
+        
+        .position-item {
+            background: #0f3460;
+            padding: 12px 8px;
+            border-radius: 6px;
+        }
+        
+        .position-label {
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        
+        .position-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            font-family: 'SF Mono', monospace;
+        }
+        
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        
+        .control-grid .center {
+            grid-column: 2;
+        }
+        
+        button {
+            background: #0f3460;
+            border: none;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #1a4a7a;
+        }
+        
+        button:active {
+            background: #0a2540;
+        }
+        
+        button.primary {
+            background: #2d5a27;
+        }
+        
+        button.primary:hover {
+            background: #3d7a37;
+        }
+        
+        button.danger {
+            background: #8b2635;
+        }
+        
+        button.danger:hover {
+            background: #ab3645;
+        }
+        
+        .target-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .target-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background: #0f3460;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            cursor: pointer;
+        }
+        
+        .target-item:hover {
+            background: #1a4a7a;
+        }
+        
+        .target-item.selected {
+            border-left: 3px solid #4ade80;
+        }
+        
+        .target-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .target-name {
+            font-weight: 500;
+        }
+        
+        .target-meta {
+            font-size: 0.75rem;
+            color: #888;
+        }
+        
+        .mode-toggle {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .mode-toggle button {
+            flex: 1;
+            opacity: 0.6;
+        }
+        
+        .mode-toggle button.active {
+            opacity: 1;
+            background: #2d5a27;
+        }
+        
+        .face-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .face-status {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+        
+        .face-register {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .face-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        
+        .face-input:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        
+        .face-list {
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .face-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            background: #0f3460;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .face-item .name {
+            font-weight: 500;
+        }
+        
+        .face-item .delete-btn {
+            background: transparent;
+            border: none;
+            color: #f87171;
+            cursor: pointer;
+            padding: 2px 6px;
+            font-size: 0.8rem;
+        }
+        
+        .face-item .delete-btn:hover {
+            color: #ef4444;
+        }
+        
+        .face-tracking-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .face-tracking-controls button {
+            flex: 1;
+        }
+        
+        .current-face {
+            padding: 8px;
+            background: #0f3460;
+            border-radius: 4px;
+            border-left: 3px solid #4ade80;
+        }
+        
+        .auto-capture-status {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: #0f3460;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #4ade80;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        
+        .log-panel {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.75rem;
+            background: #0a0a14;
+            padding: 8px;
+            border-radius: 4px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #222;
+        }
+        
+        .log-time {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📷 相机位置控制系统</h1>
+            <span class="status-badge" id="connectionStatus">连接中...</span>
+        </header>
+        
+        <div class="main-grid">
+            <div class="video-section">
+                <div class="video-container">
+                    <img id="videoStream" src="/api/video/stream" alt="实时预览">
+                    <div class="video-overlay">
+                        <span id="videoFps">-- FPS</span>
+                        <span id="videoResolution">--</span>
+                    </div>
+                </div>
+                <div class="video-controls">
+                    <button onclick="capture()" class="primary">📸 拍摄</button>
+                    <button onclick="toggleAutoCapture()">🔄 自动拍摄</button>
+                    <button onclick="stopMotion()" class="danger">⏹ 停止</button>
+                    <button onclick="homeAxis()">🏠 归零</button>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="panel">
+                    <div class="panel-title">当前位置</div>
+                    <div class="position-display">
+                        <div class="position-item">
+                            <div class="position-label">水平</div>
+                            <div class="position-value" id="panPosition">--</div>
+                        </div>
+                        <div class="position-item">
+                            <div class="position-label">俯仰</div>
+                            <div class="position-value" id="tiltPosition">--</div>
+                        </div>
+                        <div class="position-item">
+                            <div class="position-label">滑轨</div>
+                            <div class="position-value" id="railPosition">--</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-title">运动控制</div>
+                    <div class="control-grid">
+                        <div></div>
+                        <button onclick="move('up')">↑</button>
+                        <div></div>
+                        <button onclick="move('left')">←</button>
+                        <button onclick="move('center')">●</button>
+                        <button onclick="move('right')">→</button>
+                        <div></div>
+                        <button onclick="move('down')">↓</button>
+                        <div></div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-title">目标检测</div>
+                    <div class="mode-toggle">
+                        <button id="modeAuto" class="active" onclick="setMode('auto')">自动</button>
+                        <button id="modeManual" onclick="setMode('manual')">手动</button>
+                        <button id="modeFace" onclick="setMode('face')">人脸</button>
+                    </div>
+                    <div class="target-list" id="targetList">
+                        <div class="target-item">
+                            <span style="color: #888">暂无检测目标</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel" id="facePanel">
+                    <div class="panel-title">人脸识别</div>
+                    <div class="face-controls">
+                        <div class="face-status" id="faceStatus">
+                            <span>已注册: <strong id="faceCount">0</strong> 人</span>
+                        </div>
+                        <div class="face-register">
+                            <input type="text" id="faceName" placeholder="输入姓名" class="face-input">
+                            <button onclick="registerFace()" class="primary">📷 注册</button>
+                        </div>
+                        <div class="face-list" id="faceList">
+                            <!-- 已注册人脸列表 -->
+                        </div>
+                        <div class="face-tracking-controls">
+                            <button onclick="startFaceTracking()" class="primary">🎯 开始跟踪</button>
+                            <button onclick="stopFaceTracking()" class="danger">⏹ 停止</button>
+                        </div>
+                        <div class="current-face" id="currentFace" style="display: none;">
+                            <span>当前跟踪: <strong id="currentFaceName">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-title">自动拍摄</div>
+                    <div class="auto-capture-status">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="captureProgress" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text" id="captureStatus">就绪</div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-title">系统日志</div>
+                    <div class="log-panel" id="logPanel"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>

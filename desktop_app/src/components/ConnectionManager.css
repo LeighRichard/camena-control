@@ -1,0 +1,111 @@
+.connection-manager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+}
+
+.connection-card {
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  padding: 40px;
+  width: 500px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.connection-card h1 {
+  margin-bottom: 8px;
+  font-size: 28px;
+  text-align: center;
+}
+
+.subtitle {
+  text-align: center;
+  color: #888;
+  margin-bottom: 32px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #ccc;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background-color: #1a1a1a;
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.error-message {
+  background-color: #ff4444;
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.connect-button {
+  width: 100%;
+  padding: 14px;
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.connect-button:hover:not(:disabled) {
+  background-color: #3a8eef;
+}
+
+.connect-button:disabled {
+  background-color: #3a3a3a;
+  cursor: not-allowed;
+}
+
+.connection-info {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.connection-info h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: #ccc;
+}
+
+.connection-info ul {
+  list-style: none;
+  padding: 0;
+}
+
+.connection-info li {
+  padding: 8px 0;
+  font-size: 13px;
+  color: #888;
+}
+
+.connection-info strong {
+  color: #4a9eff;
+}
