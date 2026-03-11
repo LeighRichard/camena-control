@@ -36,6 +36,9 @@ class CommandType(IntEnum):
     CONFIG = 0x03       # 参数配置
     ESTOP = 0x04        # 急停
     HOME = 0x05         # 归零
+    SET_VELOCITY = 0x06 # 速度控制
+    STOP = 0x07         # 停止运动
+    MOVE_ABSOLUTE = 0x08 # 绝对位置移动
 
 
 class ResponseType(IntEnum):

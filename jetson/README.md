@@ -2,6 +2,13 @@
 
 基于深度相机的相机位置控制与自动拍摄系统，使用深度学习进行农作物目标检测。
 
+## 核心特性
+
+- **多推理引擎支持**: TensorRT / ONNX Runtime / 模拟模式
+- **Python 3.6-3.11兼容**: 完美解决Jetson Nano TensorRT版本限制
+- **高性能推理**: GPU加速，FPS可达40+
+- **自动引擎选择**: 智能选择最优推理引擎
+
 ## 支持的深度相机
 
 系统支持以下深度相机：
@@ -34,6 +41,23 @@ jetson/
 pip install -e ".[dev]"
 ```
 
+### 推理引擎安装
+
+**ONNX Runtime（推荐，支持Python 3.6-3.11）:**
+```bash
+# GPU版本（推荐）
+pip install onnxruntime-gpu
+
+# 或CPU版本
+pip install onnxruntime
+```
+
+**TensorRT（可选，仅支持Python 3.6）:**
+```bash
+# Jetson Nano自带TensorRT
+# 需要Python 3.6环境
+```
+
 ### 相机 SDK 安装
 
 根据你使用的相机类型安装对应的 SDK：
@@ -57,7 +81,25 @@ pip install pyrealsense2 pyorbbecsdk>=1.5.7
 
 ## 快速开始
 
-### 1. 配置相机类型
+### 1. ONNX Runtime快速上手
+
+```bash
+# 安装ONNX Runtime
+pip install onnxruntime-gpu
+
+# 转换模型为ONNX格式
+python scripts/convert_to_onnx.py --model models/yolov5s.pt --output models/yolov5s.onnx
+
+# 验证安装
+python scripts/test_onnx_support.py
+
+# 性能测试
+python scripts/benchmark_detector.py --model models/yolov5s.onnx
+```
+
+详细指南请查看: [ONNX Runtime快速开始](QUICKSTART_ONNX.md)
+
+### 2. 配置相机类型
 
 编辑 `config/system_config.yaml`：
 
@@ -71,13 +113,13 @@ camera:
 - `realsense`: 强制使用 RealSense
 - `orbbec`: 强制使用 Orbbec
 
-### 2. 运行系统
+### 3. 运行系统
 
 ```bash
 python main.py
 ```
 
-### 3. 查看相机信息
+### 4. 查看相机信息
 
 ```python
 from src.camera.factory import CameraFactory
@@ -110,6 +152,13 @@ pytest -m hardware
 
 ## 文档
 
+### ONNX Runtime相关
+- [ONNX Runtime快速开始](QUICKSTART_ONNX.md) - 5分钟快速上手
+- [ONNX Runtime使用指南](docs/ONNX_RUNTIME_USAGE_GUIDE.md) - 详细使用说明
+- [TensorRT兼容性解决方案](docs/TENSORRT_PYTHON_COMPATIBILITY_SOLUTION.md) - 技术方案详解
+- [实施总结](docs/ONNX_RUNTIME_IMPLEMENTATION_SUMMARY.md) - 完整实施报告
+
+### 相机相关
 - [Orbbec 相机设置指南](docs/ORBBEC_SETUP.md) - Orbbec 相机详细配置
 - [迁移计划](docs/ORBBEC_MIGRATION_PLAN.md) - 从 RealSense 迁移到 Orbbec 的详细计划
 
