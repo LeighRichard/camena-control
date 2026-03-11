@@ -8,6 +8,28 @@
 - **Python 3.6-3.11兼容**: 完美解决Jetson Nano TensorRT版本限制
 - **高性能推理**: GPU加速，FPS可达40+
 - **自动引擎选择**: 智能选择最优推理引擎
+- **一键部署**: 自动化部署脚本，支持多平台
+
+## 快速开始
+
+### 一键部署（推荐）
+
+**Linux / macOS / Jetson Nano:**
+```bash
+git clone https://github.com/LeighRichard/camena-control.git
+cd camena-control/jetson
+chmod +x deploy.sh
+./deploy.sh
+```
+
+**Windows:**
+```cmd
+git clone https://github.com/LeighRichard/camena-control.git
+cd camena-control\jetson
+deploy.bat
+```
+
+详细部署指南请查看: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
 
 ## 支持的深度相机
 
