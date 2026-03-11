@@ -28,7 +28,9 @@
 
 **必须先安装 Python 3.9,否则部署脚本会失败**
 
-#### 方法 1: 使用 deadsnakes PPA (推荐)
+**重要**: Jetson Nano 是 ARM64 架构,默认软件源没有 Python 3.9,需要特殊方法安装。
+
+#### 方法 1: 尝试使用 deadsnakes PPA
 
 ```bash
 sudo apt-get update
@@ -38,25 +40,39 @@ sudo apt-get update
 sudo apt-get install python3.9 python3.9-venv python3.9-dev python3.9-distutils
 ```
 
-#### 方法 2: 从源码编译
+**如果报错 "无法找到软件包",说明 PPA 不支持 ARM64,请使用方法 2。**
+
+#### 方法 2: 从源码编译 (推荐用于 Jetson Nano)
+
+这是最可靠的方法,适用于 ARM64 架构。
+
+**详细步骤请参考**: [JETSON_PYTHON39_INSTALL.md](JETSON_PYTHON39_INSTALL.md)
+
+快速安装:
 
 ```bash
-# 安装编译依赖
-sudo apt-get install build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev wget libbz2-dev
+# 1. 安装编译依赖
+sudo apt-get update
+sudo apt-get install -y \
+    build-essential zlib1g-dev libncurses5-dev libgdbm-dev \
+    libnss3-dev libssl-dev libreadline-dev libffi-dev \
+    libsqlite3-dev wget libbz2-dev liblzma-dev uuid-dev
 
-# 下载 Python 3.9
+# 2. 下载并编译 Python 3.9
+mkdir -p ~/python_build && cd ~/python_build
 wget https://www.python.org/ftp/python/3.9.18/Python-3.9.18.tgz
-tar -xf Python-3.9.18.tgz
-cd Python-3.9.18
+tar -xf Python-3.9.18.tgz && cd Python-3.9.18
 
-# 配置和编译
+# 3. 配置和编译 (约 30-60 分钟)
 ./configure --enable-optimizations
 make -j4
 sudo make altinstall
 
-# 验证安装
+# 4. 验证安装
 python3.9 --version
 ```
+
+**注意**: 编译时间较长,请耐心等待。如果内存不足,可以增加交换空间或减少并行编译数。
 
 ### 方案一: 使用部署脚本(推荐)
 
