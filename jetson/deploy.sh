@@ -1,6 +1,6 @@
-#!/bin/bash
+﻿#!/bin/bash
 # 一键部署脚本 - 智能相机位置控制系统
-# 适用于 Jetson Nano / Ubuntu / macOS
+# 适用于 Jetson Nano / Ubuntu 18.04 / macOS
 
 set -e  # 遇到错误立即退出
 
@@ -37,6 +37,17 @@ show_banner() {
     echo ""
 }
 
+# 检查工作目录
+check_working_directory() {
+    if [ ! -f "requirements.txt" ]; then
+        log_error "请在 jetson 目录下运行此脚本"
+        log_error "当前目录: $(pwd)"
+        log_info "正确用法: cd jetson && ./deploy.sh"
+        exit 1
+    fi
+    log_success "工作目录检查通过"
+}
+
 # 检测操作系统
 detect_os() {
     log_info "检测操作系统..."
@@ -48,7 +59,7 @@ detect_os() {
         
         if [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
             PKG_MANAGER="apt-get"
-            log_success "检测到 Ubuntu/Debian 系统"
+            log_success "检测到 Ubuntu/Debian 系统 (版本: $VER)"
         elif [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red Hat"* ]]; then
             PKG_MANAGER="yum"
             log_success "检测到 CentOS/RHEL 系统"
@@ -157,22 +168,59 @@ create_virtualenv() {
         log_success "虚拟环境创建完成"
     fi
     
-    # 激活虚拟环境
+    # 激活虚拟环境并验证
     source $VENV_DIR/bin/activate
-    log_info "已激活虚拟环境"
+    
+    # 验证虚拟环境是否正确激活
+    if [[ "$VIRTUAL_ENV" != *"$(pwd)/venv"* ]]; then
+        log_error "虚拟环境激活失败"
+        exit 1
+    fi
+    
+    log_success "已激活虚拟环境: $(which python)"
 }
 
 # 安装 Python 依赖
 install_python_dependencies() {
     log_info "安装 Python 依赖..."
     
-    # 升级 pip
-    pip install --upgrade pip setuptools wheel
+    # 升级 pip（带重试机制）
+    local max_retries=3
+    local retry_count=0
     
-    # 安装基础依赖
+    while [ $retry_count -lt $max_retries ]; do
+        if pip install --upgrade pip setuptools wheel; then
+            break
+        else
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+                log_warning "pip 升级失败，重试 $retry_count/$max_retries..."
+                sleep 2
+            else
+                log_error "pip 升级失败，请检查网络连接"
+                exit 1
+            fi
+        fi
+    done
+    
+    # 安装基础依赖（带重试机制）
     if [ -f "requirements.txt" ]; then
         log_info "安装 requirements.txt 中的依赖..."
-        pip install -r requirements.txt
+        retry_count=0
+        while [ $retry_count -lt $max_retries ]; do
+            if pip install -r requirements.txt; then
+                break
+            else
+                retry_count=$((retry_count + 1))
+                if [ $retry_count -lt $max_retries ]; then
+                    log_warning "依赖安装失败，重试 $retry_count/$max_retries..."
+                    sleep 2
+                else
+                    log_error "依赖安装失败，请检查网络连接或 requirements.txt"
+                    exit 1
+                fi
+            fi
+        done
     else
         log_error "未找到 requirements.txt"
         exit 1
@@ -182,7 +230,7 @@ install_python_dependencies() {
     if [ "$HARDWARE" = "jetson_nano" ]; then
         log_info "安装 Jetson Nano 特定依赖..."
         
-        # Jetson Nano 使用 ONNX Runtime
+        # Jetson Nano 使用 ONNX Runtime GPU 版本
         pip install onnxruntime-gpu || pip install onnxruntime
         
     elif [ "$HARDWARE" = "jetson" ]; then
@@ -195,7 +243,7 @@ install_python_dependencies() {
         # 桌面平台优先使用 GPU 版本
         if command -v nvidia-smi &> /dev/null; then
             log_info "检测到 NVIDIA GPU，安装 GPU 版本依赖..."
-            pip install onnxruntime-gpu
+            pip install onnxruntime-gpu || pip install onnxruntime
         else
             log_info "未检测到 GPU，安装 CPU 版本依赖..."
             pip install onnxruntime
@@ -209,18 +257,27 @@ install_python_dependencies() {
 install_camera_sdk() {
     log_info "安装相机 SDK..."
     
-    # Intel RealSense
-    read -p "是否安装 Intel RealSense SDK? (y/n): " install_realsense
-    if [ "$install_realsense" = "y" ]; then
-        log_info "安装 pyrealsense2..."
-        pip install pyrealsense2 || log_warning "pyrealsense2 安装失败，可能需要手动安装"
-    fi
+    # 检查是否为非交互模式
+    local install_realsense="n"
+    local install_orbbec="n"
     
-    # Orbbec
-    read -p "是否安装 Orbbec SDK? (y/n): " install_orbbec
-    if [ "$install_orbbec" = "y" ]; then
-        log_info "安装 pyorbbecsdk..."
-        pip install pyorbbecsdk || log_warning "pyorbbecsdk 安装失败，可能需要手动安装"
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+        log_info "非交互模式：跳过相机 SDK 安装"
+        log_info "如需安装，请手动运行: pip install pyrealsense2 或 pip install pyorbbecsdk"
+    else
+        # Intel RealSense
+        read -p "是否安装 Intel RealSense SDK? (y/n): " install_realsense
+        if [ "$install_realsense" = "y" ]; then
+            log_info "安装 pyrealsense2..."
+            pip install pyrealsense2 || log_warning "pyrealsense2 安装失败，可能需要手动安装"
+        fi
+        
+        # Orbbec
+        read -p "是否安装 Orbbec SDK? (y/n): " install_orbbec
+        if [ "$install_orbbec" = "y" ]; then
+            log_info "安装 pyorbbecsdk..."
+            pip install pyorbbecsdk || log_warning "pyorbbecsdk 安装失败，可能需要手动安装"
+        fi
     fi
     
     log_success "相机 SDK 安装完成"
@@ -248,15 +305,26 @@ download_models() {
         return
     fi
     
-    read -p "是否下载 YOLOv5s ONNX 模型? (y/n): " download_yolo
-    if [ "$download_yolo" = "y" ]; then
-        log_info "下载 YOLOv5s ONNX 模型..."
-        
-        # 这里可以添加模型下载逻辑
-        # 例如从 GitHub Releases 或其他源下载
-        
-        log_warning "请手动下载模型或使用转换脚本:"
-        log_info "  python scripts/convert_to_onnx.py --model yolov5s.pt --output models/yolov5s.onnx"
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+        log_info "非交互模式：跳过模型下载"
+        log_info "请手动下载模型或使用: python scripts/model_setup.py download yolov5s"
+    else
+        read -p "是否下载 YOLOv5s ONNX 模型? (y/n): " download_yolo
+        if [ "$download_yolo" = "y" ]; then
+            log_info "尝试使用 model_setup.py 下载模型..."
+            
+            # 使用 model_setup.py 下载模型
+            if [ -f "scripts/model_setup.py" ]; then
+                python scripts/model_setup.py download yolov5s || {
+                    log_warning "自动下载失败，请手动下载模型"
+                    log_info "方法1: python scripts/model_setup.py download yolov5s"
+                    log_info "方法2: python scripts/convert_to_onnx.py --model yolov5s.pt --output models/yolov5s.onnx"
+                }
+            else
+                log_warning "未找到 model_setup.py，请手动下载模型"
+                log_info "  python scripts/convert_to_onnx.py --model yolov5s.pt --output models/yolov5s.onnx"
+            fi
+        fi
     fi
 }
 
@@ -291,13 +359,17 @@ configure_system() {
 run_tests() {
     log_info "运行测试..."
     
-    read -p "是否运行集成测试? (y/n): " run_test
-    if [ "$run_test" = "y" ]; then
-        log_info "运行 ONNX Runtime 集成测试..."
-        python scripts/test_onnx_support.py
-        
-        log_info "运行单元测试..."
-        pytest tests/ -v || log_warning "部分测试失败"
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+        log_info "非交互模式：跳过测试"
+    else
+        read -p "是否运行集成测试? (y/n): " run_test
+        if [ "$run_test" = "y" ]; then
+            log_info "运行 ONNX Runtime 集成测试..."
+            python scripts/test_onnx_support.py || log_warning "ONNX 测试失败"
+            
+            log_info "运行单元测试..."
+            pytest tests/ -v || log_warning "部分测试失败"
+        fi
     fi
     
     log_success "测试完成"
@@ -328,11 +400,14 @@ create_system_service() {
     if [[ "$OSTYPE" != "darwin"* ]]; then
         log_info "创建系统服务..."
         
-        read -p "是否创建 systemd 服务? (y/n): " create_service
-        if [ "$create_service" = "y" ]; then
-            SERVICE_FILE="/etc/systemd/system/camera-control.service"
-            
-            sudo tee $SERVICE_FILE > /dev/null << EOF
+        if [ "$NON_INTERACTIVE" = "true" ]; then
+            log_info "非交互模式：跳过系统服务创建"
+        else
+            read -p "是否创建 systemd 服务? (y/n): " create_service
+            if [ "$create_service" = "y" ]; then
+                SERVICE_FILE="/etc/systemd/system/camera-control.service"
+                
+                sudo tee $SERVICE_FILE > /dev/null << EOF
 [Unit]
 Description=Smart Camera Position Control System
 After=network.target
@@ -348,15 +423,16 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-            
-            sudo systemctl daemon-reload
-            sudo systemctl enable camera-control
-            
-            log_success "系统服务创建完成"
-            log_info "使用以下命令管理服务:"
-            log_info "  sudo systemctl start camera-control   # 启动"
-            log_info "  sudo systemctl stop camera-control    # 停止"
-            log_info "  sudo systemctl status camera-control  # 状态"
+                
+                sudo systemctl daemon-reload
+                sudo systemctl enable camera-control
+                
+                log_success "系统服务创建完成"
+                log_info "使用以下命令管理服务:"
+                log_info "  sudo systemctl start camera-control   # 启动"
+                log_info "  sudo systemctl stop camera-control    # 停止"
+                log_info "  sudo systemctl status camera-control  # 状态"
+            fi
         fi
     fi
 }
@@ -395,15 +471,23 @@ show_summary() {
 main() {
     show_banner
     
+    # 检查工作目录
+    check_working_directory
+    
     # 检测环境
     detect_os
     detect_hardware
     check_python
     
     # 安装依赖
-    read -p "是否安装系统依赖? (y/n): " install_sys
-    if [ "$install_sys" = "y" ]; then
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+        log_info "非交互模式：自动安装系统依赖"
         install_system_dependencies
+    else
+        read -p "是否安装系统依赖? (y/n): " install_sys
+        if [ "$install_sys" = "y" ]; then
+            install_system_dependencies
+        fi
     fi
     
     # 创建虚拟环境
@@ -437,5 +521,21 @@ main() {
     show_summary
 }
 
+# 解析命令行参数
+while [ "$1" != "" ]; do
+    case $1 in
+        -y | --yes )    NON_INTERACTIVE="true"
+                       ;;
+        -h | --help )   echo "用法: ./deploy.sh [-y|--yes]"
+                       echo "  -y, --yes  非交互模式，自动安装所有依赖"
+                       exit
+                       ;;
+        * )             echo "未知参数: $1"
+                       exit 1
+    esac
+    shift
+done
+
 # 运行主函数
 main
+
