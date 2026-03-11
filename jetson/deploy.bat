@@ -40,16 +40,59 @@ goto :eof
 REM 检查 Python
 :check_python
 call :log_info "检查 Python 版本..."
+
+REM 只支持 Python 3.9
+python3.9 --version >nul 2>&1
+if not errorlevel 1 (
+    set PYTHON_CMD=python3.9
+    for /f "tokens=2" %%i in ('python3.9 --version 2^>^&1') do set PYTHON_VERSION=%%i
+    for /f "tokens=1,2 delims=." %%a in ("%PYTHON_VERSION%") do (
+        set PYTHON_MAJOR=%%a
+        set PYTHON_MINOR=%%b
+    )
+    if %PYTHON_MAJOR% equ 3 (
+        if %PYTHON_MINOR% equ 9 (
+            call :log_success "Python 3.9 已找到: %PYTHON_VERSION%"
+            goto :eof
+        )
+    )
+    call :log_error "python3.9 命令存在但版本不正确: %PYTHON_VERSION%"
+    pause
+    exit /b 1
+)
+
+REM 检查默认 Python 是否为 3.9
 python --version >nul 2>&1
 if errorlevel 1 (
-    call :log_error "未找到 Python，请先安装 Python 3.6+"
+    call :log_error "未找到 Python 3.9"
+    call :log_error "本项目要求使用 Python 3.9"
+    call :log_info ""
+    call :log_info "下载地址: https://www.python.org/downloads/release/python-3918/"
+    call :log_info "选择: Windows installer (64-bit)"
     pause
     exit /b 1
 )
 
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
-call :log_success "Python 版本: %PYTHON_VERSION%"
-goto :eof
+for /f "tokens=1,2 delims=." %%a in ("%PYTHON_VERSION%") do (
+    set PYTHON_MAJOR=%%a
+    set PYTHON_MINOR=%%b
+)
+
+if %PYTHON_MAJOR% equ 3 (
+    if %PYTHON_MINOR% equ 9 (
+        set PYTHON_CMD=python
+        call :log_success "Python 3.9 已找到: %PYTHON_VERSION%"
+        goto :eof
+    )
+)
+
+call :log_error "本项目要求使用 Python 3.9，当前版本: %PYTHON_VERSION%"
+call :log_info ""
+call :log_info "下载地址: https://www.python.org/downloads/release/python-3918/"
+call :log_info "选择: Windows installer (64-bit)"
+pause
+exit /b 1
 
 REM 创建虚拟环境
 :create_virtualenv
@@ -58,7 +101,7 @@ call :log_info "创建 Python 虚拟环境..."
 if exist venv (
     call :log_warning "虚拟环境已存在，跳过创建"
 ) else (
-    python -m venv venv
+    %PYTHON_CMD% -m venv venv
     call :log_success "虚拟环境创建完成"
 )
 

@@ -7,8 +7,11 @@ name = "camera-position-control"
 version = "0.1.0"
 description = "嵌入式相机位置控制与自动拍摄系统 - Jetson Nano 端"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9,<3.10"
 license = {text = "MIT"}
+
+# 项目统一使用 Python 3.9
+# Python 3.9 在 Jetson Nano 和桌面平台都有良好的兼容性
 
 dependencies = [
     "pyrealsense2>=2.50.0",

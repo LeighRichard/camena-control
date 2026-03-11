@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # 一键部署脚本 - 智能相机位置控制系统
 # 适用于 Jetson Nano / Ubuntu 18.04 / macOS
 
@@ -102,23 +102,39 @@ detect_hardware() {
 # 检查 Python 版本
 check_python() {
     log_info "检查 Python 版本..."
-    
-    if command -v python3 &> /dev/null; then
-        PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+
+    # 只支持 Python 3.9
+    if command -v python3.9 &> /dev/null; then
+        PYTHON_CMD="python3.9"
+        PYTHON_VERSION=$($PYTHON_CMD --version | awk '{print $2}')
         PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
         PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-        
-        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 6 ]; then
-            PYTHON_CMD="python3"
-            log_success "Python 版本: $PYTHON_VERSION"
+
+        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -eq 9 ]; then
+            log_success "Python 3.9 已找到: $PYTHON_VERSION"
+            return
         else
-            log_error "需要 Python 3.6 或更高版本，当前版本: $PYTHON_VERSION"
+            log_error "python3.9 命令存在但版本不正确: $PYTHON_VERSION"
             exit 1
         fi
-    else
-        log_error "未找到 Python 3"
-        exit 1
     fi
+
+    # 未找到 Python 3.9
+    log_error "未找到 Python 3.9"
+    log_error "本项目要求使用 Python 3.9"
+    log_info ""
+    log_info "安装方法:"
+    log_info "  Ubuntu/Debian:"
+    log_info "    sudo apt-get update"
+    log_info "    sudo apt-get install software-properties-common"
+    log_info "    sudo add-apt-repository ppa:deadsnakes/ppa"
+    log_info "    sudo apt-get update"
+    log_info "    sudo apt-get install python3.9 python3.9-venv python3.9-dev python3.9-distutils"
+    log_info ""
+    log_info "  或从源码编译:"
+    log_info "    wget https://www.python.org/ftp/python/3.9.18/Python-3.9.18.tgz"
+    log_info "    参考: JETSON_DEPLOYMENT_GUIDE.md"
+    exit 1
 }
 
 # 安装系统依赖
@@ -183,11 +199,11 @@ create_virtualenv() {
 # 安装 Python 依赖
 install_python_dependencies() {
     log_info "安装 Python 依赖..."
-    
+
     # 升级 pip（带重试机制）
     local max_retries=3
     local retry_count=0
-    
+
     while [ $retry_count -lt $max_retries ]; do
         if pip install --upgrade pip setuptools wheel; then
             break
@@ -202,13 +218,24 @@ install_python_dependencies() {
             fi
         fi
     done
-    
+
+    # 根据硬件平台选择依赖文件
+    local requirements_file="requirements.txt"
+    if [ "$HARDWARE" = "jetson_nano" ] || [ "$HARDWARE" = "jetson" ]; then
+        if [ -f "requirements-jetson.txt" ]; then
+            requirements_file="requirements-jetson.txt"
+            log_info "检测到 Jetson 平台，使用 requirements-jetson.txt"
+        else
+            log_warning "未找到 requirements-jetson.txt，使用默认 requirements.txt"
+        fi
+    fi
+
     # 安装基础依赖（带重试机制）
-    if [ -f "requirements.txt" ]; then
-        log_info "安装 requirements.txt 中的依赖..."
+    if [ -f "$requirements_file" ]; then
+        log_info "安装 $requirements_file 中的依赖..."
         retry_count=0
         while [ $retry_count -lt $max_retries ]; do
-            if pip install -r requirements.txt; then
+            if pip install -r $requirements_file; then
                 break
             else
                 retry_count=$((retry_count + 1))
@@ -216,13 +243,13 @@ install_python_dependencies() {
                     log_warning "依赖安装失败，重试 $retry_count/$max_retries..."
                     sleep 2
                 else
-                    log_error "依赖安装失败，请检查网络连接或 requirements.txt"
+                    log_error "依赖安装失败，请检查网络连接或 $requirements_file"
                     exit 1
                 fi
             fi
         done
     else
-        log_error "未找到 requirements.txt"
+        log_error "未找到 $requirements_file"
         exit 1
     fi
     
@@ -256,31 +283,59 @@ install_python_dependencies() {
 # 安装相机 SDK
 install_camera_sdk() {
     log_info "安装相机 SDK..."
-    
+
     # 检查是否为非交互模式
     local install_realsense="n"
     local install_orbbec="n"
-    
+
     if [ "$NON_INTERACTIVE" = "true" ]; then
         log_info "非交互模式：跳过相机 SDK 安装"
-        log_info "如需安装，请手动运行: pip install pyrealsense2 或 pip install pyorbbecsdk"
+        log_info "如需安装，请参考以下说明"
     else
-        # Intel RealSense
-        read -p "是否安装 Intel RealSense SDK? (y/n): " install_realsense
-        if [ "$install_realsense" = "y" ]; then
-            log_info "安装 pyrealsense2..."
-            pip install pyrealsense2 || log_warning "pyrealsense2 安装失败，可能需要手动安装"
+        # Jetson 平台特殊说明
+        if [ "$HARDWARE" = "jetson_nano" ] || [ "$HARDWARE" = "jetson" ]; then
+            log_warning "=========================================="
+            log_warning "Jetson 平台相机 SDK 安装说明"
+            log_warning "=========================================="
+            log_warning "pyrealsense2 和 pyorbbecsdk 在 Jetson 平台上"
+            log_warning "可能没有预编译的 Python 3.13 包"
+            log_warning ""
+            log_warning "建议方案:"
+            log_warning "1. 使用 Python 3.6-3.9 (Jetson Nano 默认 Python)"
+            log_warning "2. 从源码编译 SDK"
+            log_warning "3. 使用 Docker 容器"
+            log_warning "=========================================="
+            echo ""
         fi
-        
+
+        # Intel RealSense
+        read -p "是否尝试安装 Intel RealSense SDK? (y/n): " install_realsense
+        if [ "$install_realsense" = "y" ]; then
+            log_info "尝试安装 pyrealsense2..."
+            if pip install pyrealsense2; then
+                log_success "pyrealsense2 安装成功"
+            else
+                log_warning "pyrealsense2 安装失败"
+                log_info "请参考官方文档从源码编译:"
+                log_info "  https://github.com/IntelRealSense/librealsense/blob/master/doc/installation_jetson.md"
+            fi
+        fi
+
         # Orbbec
-        read -p "是否安装 Orbbec SDK? (y/n): " install_orbbec
+        read -p "是否尝试安装 Orbbec SDK? (y/n): " install_orbbec
         if [ "$install_orbbec" = "y" ]; then
-            log_info "安装 pyorbbecsdk..."
-            pip install pyorbbecsdk || log_warning "pyorbbecsdk 安装失败，可能需要手动安装"
+            log_info "尝试安装 pyorbbecsdk..."
+            if pip install pyorbbecsdk; then
+                log_success "pyorbbecsdk 安装成功"
+            else
+                log_warning "pyorbbecsdk 安装失败"
+                log_info "请参考官方文档从源码编译:"
+                log_info "  https://github.com/orbbec/pyorbbecsdk"
+            fi
         fi
     fi
-    
-    log_success "相机 SDK 安装完成"
+
+    log_success "相机 SDK 安装流程完成"
 }
 
 # 创建必要的目录
