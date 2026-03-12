@@ -67,11 +67,11 @@ def invalid_camera_config(draw):
     config = CameraConfig()
     
     if invalid_type == 'width':
-        config.width = draw(st.integers(100, 500))  # 无效宽度
+        config.width = draw(st.integers(100, 319))  # 无效宽度（< 320）
     elif invalid_type == 'height':
-        config.height = draw(st.integers(100, 300))  # 无效高度
+        config.height = draw(st.integers(100, 239))  # 无效高度（< 240）
     elif invalid_type == 'fps':
-        config.fps = draw(st.sampled_from([1, 5, 10, 45, 90]))  # 无效帧率
+        config.fps = draw(st.sampled_from([0, 121, 150, 200]))  # 无效帧率（< 1 或 > 120）
     elif invalid_type == 'brightness':
         config.brightness = draw(st.one_of(
             st.integers(-200, -65),

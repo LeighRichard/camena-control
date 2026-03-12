@@ -196,6 +196,18 @@ def encode_command(cmd: Command, auto_seq: bool = True) -> bytes:
         data = b''
     elif cmd.type == CommandType.HOME:
         data = struct.pack('<B', cmd.axis)
+    elif cmd.type == CommandType.SET_VELOCITY:
+        # 速度控制指令：axis + velocity
+        data = struct.pack('<Bi', cmd.axis, cmd.value)
+    elif cmd.type == CommandType.STOP:
+        # 停止运动指令：可选 axis
+        if cmd.axis != AxisType.ALL:
+            data = struct.pack('<B', cmd.axis)
+        else:
+            data = b''
+    elif cmd.type == CommandType.MOVE_ABSOLUTE:
+        # 绝对位置移动指令：axis + position
+        data = struct.pack('<Bi', cmd.axis, cmd.value)
     else:
         data = b''
     
@@ -268,6 +280,21 @@ def decode_command(data: bytes) -> Tuple[Optional[Command], str]:
     elif cmd_type == CommandType.HOME:
         axis = cmd_data[0]
         return Command(type=cmd_type, axis=AxisType(axis), seq=seq), ""
+    elif cmd_type == CommandType.SET_VELOCITY:
+        # 速度控制指令：axis + velocity
+        axis, velocity = struct.unpack('<Bi', cmd_data)
+        return Command(type=cmd_type, axis=AxisType(axis), value=velocity, seq=seq), ""
+    elif cmd_type == CommandType.STOP:
+        # 停止运动指令：可选 axis
+        if len(cmd_data) > 0:
+            axis = cmd_data[0]
+            return Command(type=cmd_type, axis=AxisType(axis), seq=seq), ""
+        else:
+            return Command(type=cmd_type, seq=seq), ""
+    elif cmd_type == CommandType.MOVE_ABSOLUTE:
+        # 绝对位置移动指令：axis + position
+        axis, position = struct.unpack('<Bi', cmd_data)
+        return Command(type=cmd_type, axis=AxisType(axis), value=position, seq=seq), ""
     else:
         return None, f"未知指令类型: {cmd_type}"
 

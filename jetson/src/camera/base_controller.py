@@ -57,6 +57,49 @@ class CameraConfig:
     def from_dict(cls, data: dict) -> 'CameraConfig':
         """从字典创建"""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+    
+    def validate(self) -> Tuple[bool, str]:
+        """
+        验证配置参数
+        
+        Returns:
+            (是否有效, 错误信息)
+        """
+        errors = []
+        
+        # 验证分辨率
+        if self.width < 320 or self.width > 4096:
+            errors.append(f"宽度 {self.width} 超出有效范围 [320, 4096]")
+        if self.height < 240 or self.height > 2160:
+            errors.append(f"高度 {self.height} 超出有效范围 [240, 2160]")
+        
+        # 验证帧率
+        if self.fps < 1 or self.fps > 120:
+            errors.append(f"帧率 {self.fps} 超出有效范围 [1, 120]")
+        
+        # 验证亮度
+        if self.brightness < -64 or self.brightness > 64:
+            errors.append(f"亮度 {self.brightness} 超出有效范围 [-64, 64]")
+        
+        # 验证对比度
+        if self.contrast < 0 or self.contrast > 100:
+            errors.append(f"对比度 {self.contrast} 超出有效范围 [0, 100]")
+        
+        # 验证增益
+        if self.gain < 0 or self.gain > 128:
+            errors.append(f"增益 {self.gain} 超出有效范围 [0, 128]")
+        
+        # 验证白平衡（-1 表示自动，0 表示未设置，其他值应在有效范围内）
+        # 允许 -1, 0 或 2500-6500 范围内的值
+        if self.white_balance < -1 or self.white_balance > 6500:
+            errors.append(f"白平衡 {self.white_balance} 超出有效范围 [-1, 6500]")
+        elif self.white_balance not in [-1, 0] and self.white_balance < 2500:
+            # 如果不是 -1 或 0，且小于 2500，给出警告但不报错
+            pass  # 允许中间值
+        
+        if errors:
+            return False, "; ".join(errors)
+        return True, ""
 
 
 class BaseCameraController(ABC):

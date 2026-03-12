@@ -1,7 +1,7 @@
 """
 目标检测器模块 - 使用深度学习进行农作物目标检测
 
-支持 YOLOv5/YOLOv8 + TensorRT/ONNX Runtime 推理
+仅支持 YOLOv5/YOLOv8 + TensorRT 推理
 """
 
 from dataclasses import dataclass, field
@@ -23,14 +23,6 @@ try:
 except ImportError:
     TENSORRT_AVAILABLE = False
     logger.warning("TensorRT 不可用")
-
-# 尝试导入 ONNX Runtime
-try:
-    import onnxruntime as ort
-    ONNX_AVAILABLE = True
-except ImportError:
-    ONNX_AVAILABLE = False
-    logger.warning("ONNX Runtime 不可用")
 
 
 class SelectionStrategy(Enum):
