@@ -8,10 +8,17 @@ import logging
 from typing import Optional, List
 
 from .modes import ServoMode, TrackingState
-from ..detector import TargetInfo
-from ..face_recognition import FaceRecognizer, FaceInfo
-from ..processor import PositionAdjustment
-from ...camera.controller import ImagePair
+
+try:
+    from ..detector import TargetInfo
+    from ..face_recognition import FaceRecognizer, FaceInfo
+    from ..processor import PositionAdjustment
+    from ...camera.controller import ImagePair
+except ImportError:
+    from vision.detector import TargetInfo
+    from vision.face_recognition import FaceRecognizer, FaceInfo
+    from vision.processor import PositionAdjustment
+    from camera.controller import ImagePair
 
 logger = logging.getLogger(__name__)
 

@@ -8,10 +8,19 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple, List
 from enum import Enum
 
-from ...control.pid import PIDConfig
-from ...control.kalman import KalmanConfig
-from ..detector import TargetInfo
-from ..processor import PositionAdjustment
+try:
+    from ...control.pid import PIDConfig
+    from ...control.kalman import KalmanConfig
+except ImportError:
+    from control.pid import PIDConfig
+    from control.kalman import KalmanConfig
+
+try:
+    from ..detector import TargetInfo
+    from ..processor import PositionAdjustment
+except ImportError:
+    from vision.detector import TargetInfo
+    from vision.processor import PositionAdjustment
 
 
 class ServoMode(Enum):

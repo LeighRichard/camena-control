@@ -8,6 +8,9 @@ from control.pid import PIDController
 from .scurve import SCurvePlanner, MotionProfile
 
 # 为了向后兼容，从 control 模块导入 PID
-from ..control.pid import PIDController
+try:
+    from ..control.pid import PIDController
+except ImportError:
+    from control.pid import PIDController
 
 __all__ = ["PIDController", "SCurvePlanner", "MotionProfile"]

@@ -9,9 +9,15 @@ import logging
 from typing import Optional
 
 from .modes import ServoMode, TrackingState
-from ..detector import DetectionResult
-from ..processor import PositionAdjustment
-from ...camera.controller import ImagePair
+
+try:
+    from ..detector import DetectionResult
+    from ..processor import PositionAdjustment
+    from ...camera.controller import ImagePair
+except ImportError:
+    from vision.detector import DetectionResult
+    from vision.processor import PositionAdjustment
+    from camera.controller import ImagePair
 
 logger = logging.getLogger(__name__)
 

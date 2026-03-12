@@ -15,14 +15,24 @@ from .centering import CenteringMixin
 from .scanning import ScanningMixin
 from .face_tracking import FaceTrackingMixin
 
-from ..detector import ObjectDetector, DetectionResult, TargetInfo
-from ..processor import ImageProcessor, PositionAdjustment
-from ..face_recognition import FaceRecognizer, FaceInfo
-from ...camera.controller import CameraController, ImagePair
-from ...comm.manager import CommManager
-from ...comm.protocol import Command, CommandType
-from ...control.pid import PIDController
-from ...control.kalman import KalmanFilter, TargetTracker
+try:
+    from ..detector import ObjectDetector, DetectionResult, TargetInfo
+    from ..processor import ImageProcessor, PositionAdjustment
+    from ..face_recognition import FaceRecognizer, FaceInfo
+    from ...camera.controller import CameraController, ImagePair
+    from ...comm.manager import CommManager
+    from ...comm.protocol import Command, CommandType
+    from ...control.pid import PIDController
+    from ...control.kalman import KalmanFilter, TargetTracker
+except ImportError:
+    from vision.detector import ObjectDetector, DetectionResult, TargetInfo
+    from vision.processor import ImageProcessor, PositionAdjustment
+    from vision.face_recognition import FaceRecognizer, FaceInfo
+    from camera.controller import CameraController, ImagePair
+    from comm.manager import CommManager
+    from comm.protocol import Command, CommandType
+    from control.pid import PIDController
+    from control.kalman import KalmanFilter, TargetTracker
 
 logger = logging.getLogger(__name__)
 
