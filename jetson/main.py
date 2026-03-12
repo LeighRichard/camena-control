@@ -265,12 +265,8 @@ class CameraControlSystem:
     def _init_scheduler(self):
         """初始化任务调度器"""
         from scheduler.task_scheduler import TaskScheduler
-        
-        self.scheduler = TaskScheduler(
-            camera=self.camera,
-            comm=self.comm,
-            state_manager=self.state_manager
-        )
+
+        self.scheduler = TaskScheduler()
         logger.info("✓ 任务调度器已初始化")
     
     def _init_monitoring(self):
