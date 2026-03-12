@@ -53,13 +53,23 @@ class CameraControlSystem:
         
         # 验证配置文件
         logger.info("验证配置参数...")
-        warnings = ConfigValidator.validate_all(self.config.__dict__)
-        if warnings:
-            logger.warning(f"配置验证发现 {len(warnings)} 个警告:")
-            for warning in warnings:
-                logger.warning(f"  ⚠️  {warning}")
-        else:
-            logger.info("✅ 配置验证通过")
+        try:
+            # 将配置对象转换为字典
+            config_dict = {
+                'camera': self.config.camera.__dict__ if hasattr(self.config, 'camera') else {},
+                'serial': self.config.serial.__dict__ if hasattr(self.config, 'serial') else {},
+                'detection': self.config.detection.__dict__ if hasattr(self.config, 'detection') else {},
+                'web': self.config.web.__dict__ if hasattr(self.config, 'web') else {},
+            }
+            warnings = ConfigValidator.validate_all(config_dict)
+            if warnings:
+                logger.warning(f"配置验证发现 {len(warnings)} 个警告:")
+                for warning in warnings:
+                    logger.warning(f"  ⚠️  {warning}")
+            else:
+                logger.info("✅ 配置验证通过")
+        except Exception as e:
+            logger.warning(f"配置验证跳过: {e}")
         logger.info("=" * 50)
         
         try:

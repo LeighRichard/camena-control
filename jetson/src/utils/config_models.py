@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # 尝试导入 Pydantic，如果不可用则使用简单验证
 try:
-    from pydantic import BaseModel, Field, validator, root_validator
+    from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
     PYDANTIC_AVAILABLE = True
 except ImportError:
     PYDANTIC_AVAILABLE = False
@@ -44,7 +44,7 @@ if PYDANTIC_AVAILABLE:
         enable_depth: bool = True
         serial_number: Optional[str] = None
         
-        @validator('width')
+        @field_validator('width')
         def validate_width(cls, v):
             supported = [320, 424, 480, 640, 848, 960, 1280, 1920, 3840]
             if v not in supported:
@@ -52,22 +52,21 @@ if PYDANTIC_AVAILABLE:
                 logger.warning(f"非标准分辨率宽度: {v}，建议使用: {supported}")
             return v
         
-        @validator('height')
+        @field_validator('height')
         def validate_height(cls, v):
             supported = [180, 240, 270, 360, 480, 540, 720, 1080, 2160]
             if v not in supported:
                 logger.warning(f"非标准分辨率高度: {v}，建议使用: {supported}")
             return v
         
-        @validator('fps')
+        @field_validator('fps')
         def validate_fps(cls, v):
             supported = [6, 15, 30, 60, 90]
             if v not in supported:
                 logger.warning(f"非标准帧率: {v}，建议使用: {supported}")
             return v
         
-        class Config:
-            extra = 'ignore'  # 忽略额外字段
+        model_config = ConfigDict(extra="ignore")  # 忽略额外字段
     
     
     class CommConfigModel(BaseModel):
@@ -78,23 +77,22 @@ if PYDANTIC_AVAILABLE:
         baudrate: int = Field(default=115200, ge=9600, le=4000000)
         timeout: float = Field(default=1.0, ge=0.1, le=30.0)
         
-        @validator('baudrate')
+        @field_validator('baudrate')
         def validate_baudrate(cls, v):
             standard = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
             if v not in standard:
                 logger.warning(f"非标准波特率: {v}，建议使用: {standard}")
             return v
         
-        @validator('port')
+        @field_validator('port')
         def validate_port(cls, v):
             if not v:
                 raise ValueError("串口端口不能为空")
             return v
         
-        class Config:
-            extra = 'ignore'
-    
-    
+        model_config = ConfigDict(extra="ignore")
+
+
     class DetectionConfigModel(BaseModel):
         """目标检测配置验证模型"""
         enabled: bool = True
@@ -102,17 +100,17 @@ if PYDANTIC_AVAILABLE:
         confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
         nms_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
         target_classes: List[str] = Field(default_factory=list)
-        
-        @validator('confidence_threshold', 'nms_threshold')
-        def validate_threshold(cls, v, field):
+
+        @field_validator('confidence_threshold', 'nms_threshold')
+        @classmethod
+        def validate_threshold(cls, v, info):
             if v < 0.1:
-                logger.warning(f"{field.name} 值过低 ({v})，可能导致过多误检")
+                logger.warning(f"{info.field_name} 值过低 ({v})，可能导致过多误检")
             if v > 0.9:
-                logger.warning(f"{field.name} 值过高 ({v})，可能导致漏检")
+                logger.warning(f"{info.field_name} 值过高 ({v})，可能导致漏检")
             return v
-        
-        class Config:
-            extra = 'ignore'
+
+        model_config = ConfigDict(extra='ignore')
     
     
     class FaceRecognitionConfigModel(BaseModel):
@@ -123,15 +121,14 @@ if PYDANTIC_AVAILABLE:
         recognition_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
         backend: str = "auto"
         
-        @validator('backend')
+        @field_validator('backend')
         def validate_backend(cls, v):
             supported = ['auto', 'insightface', 'face_recognition', 'dlib', 'opencv']
             if v not in supported:
                 raise ValueError(f"不支持的后端: {v}，支持: {supported}")
             return v
         
-        class Config:
-            extra = 'ignore'
+        model_config = ConfigDict(extra="ignore")
     
     
     class VisualServoConfigModel(BaseModel):
@@ -143,8 +140,7 @@ if PYDANTIC_AVAILABLE:
         max_rail_speed: float = Field(default=50.0, ge=1.0, le=500.0)
         prediction_enabled: bool = True
         
-        class Config:
-            extra = 'ignore'
+        model_config = ConfigDict(extra="ignore")
     
     
     class SchedulerConfigModel(BaseModel):
@@ -152,8 +148,7 @@ if PYDANTIC_AVAILABLE:
         enabled: bool = True
         default_path: Optional[str] = None
         
-        class Config:
-            extra = 'ignore'
+        model_config = ConfigDict(extra="ignore")
     
     
     class SSLConfigModel(BaseModel):
@@ -162,8 +157,7 @@ if PYDANTIC_AVAILABLE:
         cert_file: str = "certs/cert.pem"
         key_file: str = "certs/key.pem"
         
-        class Config:
-            extra = 'ignore'
+        model_config = ConfigDict(extra="ignore")
     
     
     class WebConfigModel(BaseModel):
@@ -176,20 +170,19 @@ if PYDANTIC_AVAILABLE:
         video_quality: int = Field(default=80, ge=10, le=100)
         ssl: SSLConfigModel = Field(default_factory=SSLConfigModel)
         
-        @validator('host')
+        @field_validator('host')
         def validate_host(cls, v):
             if not v:
                 raise ValueError("主机地址不能为空")
             return v
         
-        @validator('port')
+        @field_validator('port')
         def validate_port(cls, v):
             if v < 1024 and v != 80 and v != 443:
                 logger.warning(f"端口 {v} 小于 1024，可能需要 root 权限")
             return v
         
-        class Config:
-            extra = 'ignore'
+        model_config = ConfigDict(extra="ignore")
     
     
     class SystemConfigModel(BaseModel):
@@ -202,8 +195,7 @@ if PYDANTIC_AVAILABLE:
         scheduler: SchedulerConfigModel = Field(default_factory=SchedulerConfigModel)
         web: WebConfigModel = Field(default_factory=WebConfigModel)
         
-        class Config:
-            extra = 'ignore'
+        model_config = ConfigDict(extra="ignore")
 
 
 else:
