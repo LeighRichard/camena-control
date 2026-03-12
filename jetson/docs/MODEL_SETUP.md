@@ -1,10 +1,10 @@
 # 模型设置指南
 
-本文档介绍如何设置深度学习模型，包括目标检测和人脸识别。
+本文档介绍如何设置深度学习模型，包括目标检测。
 
 ## 快速开始
 
-### 1. 目标检测模型（YOLOv5/YOLOv8）
+### 目标检测模型（YOLOv5/YOLOv8）
 
 ```bash
 cd jetson
@@ -14,17 +14,6 @@ python scripts/model_setup.py setup yolov5s
 
 # 或者选择更轻量的模型（适合资源受限设备）
 python scripts/model_setup.py setup yolov5n
-```
-
-### 2. 人脸识别
-
-```bash
-# 自动检测环境并安装最佳方案
-python scripts/setup_face_recognition.py
-
-# 或指定后端
-python scripts/setup_face_recognition.py --backend insightface  # GPU 加速
-python scripts/setup_face_recognition.py --backend face_recognition  # CPU
 ```
 
 ## 目标检测模型

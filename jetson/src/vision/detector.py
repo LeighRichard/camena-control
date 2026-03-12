@@ -158,9 +158,6 @@ class ObjectDetector:
         self._context = None
         self._stream = None
         self._bindings = None
-        self._onnx_session = None
-        self._input_name = None
-        self._output_names = None
         self._inference_engine = None
         self._target_counter = 0
         self._class_names = self.COCO_CLASSES.copy()
@@ -169,10 +166,10 @@ class ObjectDetector:
     
     def load_model(self, model_path: str = None) -> Tuple[bool, str]:
         """
-        加载模型（支持TensorRT和ONNX Runtime）
+        加载模型（仅支持TensorRT）
         
         Args:
-            model_path: 模型文件路径（.engine/.trt 或 .onnx）
+            model_path: 模型文件路径（.engine/.trt）
             
         Returns:
             (成功标志, 错误信息)
@@ -193,47 +190,19 @@ class ObjectDetector:
         # 根据文件扩展名选择推理引擎
         ext = os.path.splitext(self._config.model_path)[1].lower()
         
-        # 优先级：TensorRT > ONNX Runtime > 模拟模式
+        # 仅支持 TensorRT
         if ext in ['.engine', '.trt']:
             if TENSORRT_AVAILABLE:
                 return self._load_tensorrt_model()
-            elif ONNX_AVAILABLE:
-                logger.warning("TensorRT不可用，尝试使用ONNX Runtime")
-                return False, "TensorRT模型文件但TensorRT不可用"
             else:
                 self._simulation_mode = True
                 self._is_loaded = True
                 logger.warning("无可用的推理引擎，启用模拟模式")
                 return True, ""
-        
-        elif ext == '.onnx':
-            if ONNX_AVAILABLE:
-                return self._load_onnx_model()
-            else:
-                self._simulation_mode = True
-                self._is_loaded = True
-                logger.warning("ONNX Runtime不可用，启用模拟模式")
-                return True, ""
-        
+
         else:
-            # 未知扩展名，尝试自动选择
-            if TENSORRT_AVAILABLE:
-                logger.info("尝试使用TensorRT加载模型")
-                success, msg = self._load_tensorrt_model()
-                if success:
-                    return success, msg
-            
-            if ONNX_AVAILABLE:
-                logger.info("尝试使用ONNX Runtime加载模型")
-                success, msg = self._load_onnx_model()
-                if success:
-                    return success, msg
-            
-            # 都不可用，启用模拟模式
-            self._simulation_mode = True
-            self._is_loaded = True
-            logger.warning("无可用的推理引擎，启用模拟模式")
-            return True, ""
+            # 不支持的文件格式
+            return False, f"不支持的模型文件格式: {ext}，仅支持 .engine 或 .trt"
     
     def _load_tensorrt_model(self) -> Tuple[bool, str]:
         """加载TensorRT模型"""
@@ -273,55 +242,7 @@ class ObjectDetector:
             logger.error(f"加载TensorRT模型失败: {e}")
             return False, str(e)
     
-    def _load_onnx_model(self) -> Tuple[bool, str]:
-        """加载ONNX模型"""
-        if not ONNX_AVAILABLE:
-            return False, "ONNX Runtime不可用"
-        
-        try:
-            # 配置ONNX Runtime
-            providers = []
-            
-            # 优先使用CUDA
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    providers.append('CUDAExecutionProvider')
-                    logger.info("检测到CUDA，将使用GPU加速")
-            except ImportError:
-                pass
-            
-            # 回退到CPU
-            providers.append('CPUExecutionProvider')
-            
-            # 创建推理会话
-            sess_options = ort.SessionOptions()
-            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            sess_options.intra_op_num_threads = 4
-            sess_options.inter_op_num_threads = 4
-            
-            self._onnx_session = ort.InferenceSession(
-                self._config.model_path,
-                sess_options=sess_options,
-                providers=providers
-            )
-            
-            # 获取输入输出信息
-            self._input_name = self._onnx_session.get_inputs()[0].name
-            self._output_names = [o.name for o in self._onnx_session.get_outputs()]
-            
-            self._is_loaded = True
-            self._simulation_mode = False
-            self._inference_engine = 'onnx'
-            
-            logger.info(f"ONNX模型加载成功: {self._config.model_path}")
-            logger.info(f"使用推理引擎: {self._onnx_session.get_providers()}")
-            return True, ""
-            
-        except Exception as e:
-            logger.error(f"加载ONNX模型失败: {e}")
-            return False, str(e)
-    
+
     def _allocate_buffers(self):
         """分配 CUDA 缓冲区"""
         self._bindings = []
@@ -486,11 +407,8 @@ class ObjectDetector:
         return resized
     
     def _inference(self, input_tensor: np.ndarray) -> np.ndarray:
-        """执行推理（支持TensorRT和ONNX Runtime）"""
-        if self._inference_engine == 'onnx':
-            return self._onnx_inference(input_tensor)
-        else:
-            return self._tensorrt_inference(input_tensor)
+        """执行推理（仅支持TensorRT）"""
+        return self._tensorrt_inference(input_tensor)
     
     def _tensorrt_inference(self, input_tensor: np.ndarray) -> np.ndarray:
         """TensorRT 推理"""
@@ -520,17 +438,7 @@ class ObjectDetector:
         
         return self._outputs[0]['host']
     
-    def _onnx_inference(self, input_tensor: np.ndarray) -> np.ndarray:
-        """ONNX Runtime 推理"""
-        # 执行推理
-        outputs = self._onnx_session.run(
-            self._output_names,
-            {self._input_name: input_tensor}
-        )
-        
-        # 返回第一个输出
-        return outputs[0]
-    
+
     def _simulate_inference(self, image: np.ndarray) -> List[List[float]]:
         """
         模拟推理（用于测试）
@@ -848,9 +756,6 @@ class ObjectDetector:
         self._context = None
         self._stream = None
         self._bindings = None
-        self._onnx_session = None
-        self._input_name = None
-        self._output_names = None
         self._inference_engine = None
         self._is_loaded = False
         self._simulation_mode = False

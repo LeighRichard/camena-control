@@ -3,7 +3,7 @@
 目标检测器性能基准测试
 
 用法:
-    python benchmark_detector.py --model models/yolov5s.onnx
+    python benchmark_detector.py --model models/yolov5s.engine
     python benchmark_detector.py --model models/yolov5s.engine --iterations 100
 """
 
