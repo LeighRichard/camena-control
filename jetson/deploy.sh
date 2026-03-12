@@ -103,37 +103,54 @@ detect_hardware() {
 check_python() {
     log_info "检查 Python 版本..."
 
-    # 只支持 Python 3.9
-    if command -v python3.9 &> /dev/null; then
-        PYTHON_CMD="python3.9"
+    # 仅支持 Python 3.6（TensorRT 要求）
+    if command -v python3.6 &> /dev/null; then
+        PYTHON_CMD="python3.6"
         PYTHON_VERSION=$($PYTHON_CMD --version | awk '{print $2}')
         PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
         PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
-        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -eq 9 ]; then
-            log_success "Python 3.9 已找到: $PYTHON_VERSION"
+        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -eq 6 ]; then
+            log_success "Python 3.6 已找到: $PYTHON_VERSION"
+            log_info "TensorRT 完全支持 Python 3.6"
             return
         else
-            log_error "python3.9 命令存在但版本不正确: $PYTHON_VERSION"
+            log_error "python3.6 命令存在但版本不正确: $PYTHON_VERSION"
             exit 1
         fi
     fi
 
-    # 未找到 Python 3.9
-    log_error "未找到 Python 3.9"
-    log_error "本项目要求使用 Python 3.9"
+    # 尝试 python3 命令
+    if command -v python3 &> /dev/null; then
+        PYTHON_CMD="python3"
+        PYTHON_VERSION=$($PYTHON_CMD --version | awk '{print $2}')
+        PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+        PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -eq 6 ]; then
+            log_success "Python 3.6 已找到: $PYTHON_VERSION"
+            log_info "TensorRT 完全支持 Python 3.6"
+            return
+        else
+            log_error "本项目仅支持 Python 3.6（TensorRT 要求）"
+            log_error "当前版本: $PYTHON_VERSION"
+            log_info ""
+            log_info "Jetson Nano 默认已安装 Python 3.6"
+            log_info "如果未安装，请运行:"
+            log_info "  sudo apt-get update"
+            log_info "  sudo apt-get install python3.6 python3.6-venv python3.6-dev"
+            exit 1
+        fi
+    fi
+
+    # 未找到 Python 3.6
+    log_error "未找到 Python 3.6"
+    log_error "本项目仅支持 Python 3.6（TensorRT 要求）"
     log_info ""
-    log_info "安装方法:"
-    log_info "  Ubuntu/Debian:"
-    log_info "    sudo apt-get update"
-    log_info "    sudo apt-get install software-properties-common"
-    log_info "    sudo add-apt-repository ppa:deadsnakes/ppa"
-    log_info "    sudo apt-get update"
-    log_info "    sudo apt-get install python3.9 python3.9-venv python3.9-dev python3.9-distutils"
-    log_info ""
-    log_info "  或从源码编译:"
-    log_info "    wget https://www.python.org/ftp/python/3.9.18/Python-3.9.18.tgz"
-    log_info "    参考: JETSON_DEPLOYMENT_GUIDE.md"
+    log_info "Jetson Nano 默认已安装 Python 3.6"
+    log_info "如果未安装，请运行:"
+    log_info "  sudo apt-get update"
+    log_info "  sudo apt-get install python3.6 python3.6-venv python3.6-dev"
     exit 1
 }
 
@@ -256,25 +273,23 @@ install_python_dependencies() {
     # 根据硬件平台安装特定依赖
     if [ "$HARDWARE" = "jetson_nano" ]; then
         log_info "安装 Jetson Nano 特定依赖..."
-        
-        # Jetson Nano 使用 ONNX Runtime GPU 版本
-        pip install onnxruntime-gpu || pip install onnxruntime
-        
+
+        # Jetson Nano 使用 TensorRT（已预装）
+        log_success "TensorRT 已在 Jetson Nano 上预装"
+        log_info "验证 TensorRT 安装..."
+        python -c "import tensorrt; print(f'TensorRT 版本: {tensorrt.__version__}')" || {
+            log_warning "TensorRT 导入失败，请检查安装"
+            log_info "Jetson Nano 默认已安装 TensorRT"
+        }
+
     elif [ "$HARDWARE" = "jetson" ]; then
         log_info "安装 Jetson 特定依赖..."
-        pip install onnxruntime-gpu || pip install onnxruntime
-        
+        log_success "TensorRT 已在 Jetson 平台上预装"
+
     else
-        log_info "安装桌面平台依赖..."
-        
-        # 桌面平台优先使用 GPU 版本
-        if command -v nvidia-smi &> /dev/null; then
-            log_info "检测到 NVIDIA GPU，安装 GPU 版本依赖..."
-            pip install onnxruntime-gpu || pip install onnxruntime
-        else
-            log_info "未检测到 GPU，安装 CPU 版本依赖..."
-            pip install onnxruntime
-        fi
+        log_info "桌面平台不支持 TensorRT"
+        log_error "本项目仅支持 Jetson 平台（TensorRT 要求）"
+        exit 1
     fi
     
     log_success "Python 依赖安装完成"

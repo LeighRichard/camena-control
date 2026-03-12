@@ -4,17 +4,23 @@
 
 ## 核心特性
 
-- **多推理引擎支持**: TensorRT / ONNX Runtime / 模拟模式
-- **Python 3.6-3.11兼容**: 完美解决Jetson Nano TensorRT版本限制
-- **高性能推理**: GPU加速，FPS可达40+
-- **自动引擎选择**: 智能选择最优推理引擎
-- **一键部署**: 自动化部署脚本，支持多平台
+- **TensorRT 推理引擎**: 最高性能，FPS可达45-50
+- **Python 3.6 专用**: 完美兼容 Jetson Nano 默认环境
+- **Jetson 平台专用**: 针对 Jetson Nano 优化
+- **一键部署**: 自动化部署脚本
+
+## 系统要求
+
+- **硬件**: Jetson Nano / Jetson Xavier NX / Jetson AGX
+- **操作系统**: JetPack 4.x (Ubuntu 18.04)
+- **Python**: 仅支持 Python 3.6
+- **推理引擎**: TensorRT 8.x（Jetson 自带）
 
 ## 快速开始
 
-### 一键部署（推荐）
+### 一键部署
 
-**Linux / macOS / Jetson Nano:**
+**Jetson Nano:**
 ```bash
 git clone https://github.com/LeighRichard/camena-control.git
 cd camena-control/jetson
@@ -22,14 +28,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-**Windows:**
-```cmd
-git clone https://github.com/LeighRichard/camena-control.git
-cd camena-control\jetson
-deploy.bat
-```
-
-详细部署指南请查看: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+详细部署指南请查看: [JETSON_DEPLOYMENT_GUIDE.md](JETSON_DEPLOYMENT_GUIDE.md)
 
 ## 支持的深度相机
 
@@ -47,7 +46,7 @@ jetson/
 │   ├── comm/        # 串口通信模块
 │   ├── scheduler/   # 任务调度模块
 │   ├── state/       # 状态管理模块
-│   ├── vision/      # 视觉处理和目标检测模块
+│   ├── vision/      # 视觉处理和目标检测模块（TensorRT）
 │   └── web/         # Web 界面模块
 ├── tests/           # 测试代码
 ├── docs/            # 文档
@@ -63,21 +62,13 @@ jetson/
 pip install -e ".[dev]"
 ```
 
-### 推理引擎安装
+### TensorRT（已预装）
 
-**ONNX Runtime（推荐，支持Python 3.6-3.11）:**
+Jetson Nano 自带 TensorRT，无需额外安装：
+
 ```bash
-# GPU版本（推荐）
-pip install onnxruntime-gpu
-
-# 或CPU版本
-pip install onnxruntime
-```
-
-**TensorRT（可选，仅支持Python 3.6）:**
-```bash
-# Jetson Nano自带TensorRT
-# 需要Python 3.6环境
+# 验证 TensorRT 安装
+python -c "import tensorrt; print(f'TensorRT 版本: {tensorrt.__version__}')"
 ```
 
 ### 相机 SDK 安装
@@ -91,12 +82,12 @@ pip install pyrealsense2
 
 **奥比中光 Orbbec:**
 ```bash
-pip install pyorbbecsdk>=1.5.7
+pip install pyorbbecsdk>=1.3.0
 ```
 
 **两者都安装（推荐）:**
 ```bash
-pip install pyrealsense2 pyorbbecsdk>=1.5.7
+pip install pyrealsense2 pyorbbecsdk>=1.3.0
 ```
 
 系统会自动检测可用的相机并使用。

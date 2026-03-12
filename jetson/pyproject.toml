@@ -5,35 +5,35 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "camera-position-control"
 version = "0.1.0"
-description = "嵌入式相机位置控制与自动拍摄系统 - Jetson Nano 端"
+description = "嵌入式相机位置控制与自动拍摄系统 - Jetson Nano 端（仅支持 TensorRT）"
 readme = "README.md"
-requires-python = ">=3.9,<3.10"
+requires-python = ">=3.6,<3.7"
 license = {text = "MIT"}
 
-# 项目统一使用 Python 3.9
-# Python 3.9 在 Jetson Nano 和桌面平台都有良好的兼容性
+# 项目仅支持 Python 3.6（TensorRT 要求）
+# 仅支持 Jetson 平台
 
 dependencies = [
     "pyrealsense2>=2.50.0",
     "pyserial>=3.5",
-    "flask>=2.3.0",
-    "flask-socketio>=5.3.0",
-    "flask-cors>=4.0.0",
-    "numpy>=1.24.0",
-    "opencv-python>=4.8.0",
-    "pyyaml>=6.0",
-    "psutil>=5.9.0",
-    "requests>=2.31.0",
+    "flask>=2.0.0",
+    "flask-socketio>=5.1.0",
+    "flask-cors>=3.0.10",
+    "numpy>=1.19.0,<1.24.0",
+    "opencv-python>=4.5.0",
+    "pyyaml>=5.4.0",
+    "psutil>=5.7.0",
+    "requests>=2.25.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "hypothesis>=6.82.0",
-    "pytest-cov>=4.1.0",
+    "pytest>=6.0.0,<8.0.0",
+    "hypothesis>=6.0.0",
+    "pytest-cov>=3.0.0",
 ]
 inference = [
-    "torch>=2.0.0",
+    "torch>=1.10.0",
     "ultralytics>=8.0.0",
 ]
 

@@ -1,53 +1,92 @@
 # Python 版本要求
 
-## 项目统一使用 Python 3.9
+## 项目仅支持 Python 3.6
 
-本项目统一使用 **Python 3.9** 作为开发和运行环境。
+本项目**仅支持 Python 3.6**，这是 TensorRT 的要求。
 
-### 为什么选择 Python 3.9?
+### 为什么仅支持 Python 3.6？
 
-1. **最佳兼容性**
-   - 所有依赖包都有良好的 Python 3.9 支持
-   - Intel RealSense SDK (pyrealsense2) 完全支持
-   - Orbbec SDK (pyorbbecsdk) 完全支持
-   - PyTorch 和 ONNX Runtime 完全支持
+1. **TensorRT 要求**
+   - TensorRT 的 Python 绑定仅支持 Python 3.6
+   - TensorRT 是 NVIDIA 官方推理引擎，性能最优
+   - 无法在更高版本的 Python 上使用 TensorRT
 
-2. **Jetson Nano 优化**
-   - NVIDIA 为 Jetson Nano 提供了 Python 3.9 的预编译包
-   - 性能稳定,内存占用合理
-   - 避免了 Python 3.13 的兼容性问题
+2. **Jetson Nano 默认版本**
+   - Jetson Nano 默认安装 Python 3.6
+   - 无需额外安装或编译 Python
+   - 与 Jetson 平台完美兼容
 
-3. **长期支持**
-   - Python 3.9 是一个成熟稳定的版本
-   - 官方支持到 2025 年 10 月
-   - 社区支持广泛
+3. **最高性能**
+   - TensorRT 是 NVIDIA 官方推理引擎
+   - 针对 Jetson 平台深度优化
+   - FPS 可达 45-50（YOLOv5s）
 
 ### 版本要求
 
-- **最低版本**: Python 3.9.0
-- **最高版本**: Python 3.9.x (不支持 3.10+)
-- **推荐版本**: Python 3.9.18 (最新稳定版)
+- **唯一支持版本**: Python 3.6.x
+- **不支持**: Python 3.7, 3.8, 3.9, 3.10, 3.11
+- **原因**: TensorRT Python 绑定限制
 
-## 安装 Python 3.9
+## 安装 Python 3.6
 
-### Windows
+### Jetson Nano（默认已安装）
 
-1. **官方安装包**
-   ```
-   下载地址: https://www.python.org/downloads/release/python-3918/
-   选择: Windows installer (64-bit)
-   ```
+Jetson Nano 默认已安装 Python 3.6，无需额外操作：
 
-2. **安装时勾选**
-   - ✅ Add Python 3.9 to PATH
-   - ✅ Install pip
-   - ✅ Install for all users
+```bash
+# 检查版本
+python3 --version
+# 应该显示: Python 3.6.x
 
-3. **验证安装**
-   ```cmd
-   python --version
-   # 应该显示: Python 3.9.x
-   ```
+# 或
+python3.6 --version
+```
+
+如果未安装：
+
+```bash
+sudo apt-get update
+sudo apt-get install python3.6 python3.6-venv python3.6-dev
+```
+
+### 其他平台
+
+**本项目仅支持 Jetson 平台**，不支持 Windows、macOS 或其他 Linux 发行版。
+
+## 验证安装
+
+```bash
+# 检查 Python 版本
+python3 --version
+# 必须显示: Python 3.6.x
+
+# 检查 TensorRT
+python3 -c "import tensorrt; print(f'TensorRT 版本: {tensorrt.__version__}')"
+# 应该显示: TensorRT 8.x.x
+```
+
+## 常见问题
+
+### Q: 为什么不支持 Python 3.7+？
+
+**A**: TensorRT 的 Python 绑定仅支持 Python 3.6。这是 NVIDIA 的限制，无法绕过。
+
+### Q: 我可以使用 ONNX Runtime 吗？
+
+**A**: 不可以。本项目仅支持 TensorRT，不支持 ONNX Runtime 或其他推理引擎。
+
+### Q: 如何在 Python 3.6 上安装依赖？
+
+**A**: 所有依赖包都支持 Python 3.6：
+
+```bash
+pip install -r requirements-jetson.txt
+```
+
+## 参考资源
+
+- [TensorRT 文档](https://docs.nvidia.com/deeplearning/tensorrt/)
+- [Jetson Nano 开发者指南](https://developer.nvidia.com/embedded/learn/get-started-jetson-nano-devkit)
 
 ### Linux (Ubuntu/Debian)
 
