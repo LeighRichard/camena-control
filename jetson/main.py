@@ -186,12 +186,14 @@ class CameraControlSystem:
     
     def _init_comm(self):
         """初始化串口通信"""
-        from comm.manager import CommManager
+        from comm.manager import CommManager, CommConfig
         
-        self.comm = CommManager(
+        comm_config = CommConfig(
             port=self.config.comm.port,
             baudrate=self.config.comm.baudrate
         )
+        
+        self.comm = CommManager(config=comm_config)
         
         success = self.comm.connect()
         if success:
@@ -209,7 +211,7 @@ class CameraControlSystem:
         
         det_config = DetectionConfig(
             model_path=self.config.detection.model_path,
-            confidence_threshold=self.config.detection.confidence_threshold,
+            threshold=self.config.detection.confidence_threshold,
             nms_threshold=self.config.detection.nms_threshold
         )
         

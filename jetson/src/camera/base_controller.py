@@ -32,6 +32,7 @@ class CameraConfig:
     width: int = 1280
     height: int = 720
     fps: int = 30
+    enable_depth: bool = False  # 是否启用深度流
     exposure: int = -1          # -1 表示自动曝光
     brightness: int = 0         # 亮度调节
     contrast: int = 50          # 对比度
@@ -45,6 +46,7 @@ class CameraConfig:
             'width': self.width,
             'height': self.height,
             'fps': self.fps,
+            'enable_depth': self.enable_depth,
             'exposure': self.exposure,
             'brightness': self.brightness,
             'contrast': self.contrast,
