@@ -100,14 +100,14 @@ def create_app(config: Optional[WebConfig] = None):
     
     # 身份认证管理器
     if config.enable_auth:
-        from src.network.auth import AuthManager, Permission
+        from network.auth import AuthManager, Permission
         app.auth_manager = AuthManager(secret_key=config.secret_key)
     else:
         app.auth_manager = None
 
     # 自适应流管理器
     if config.enable_adaptive_streaming:
-        from src.network.adaptive_streaming import AdaptiveStreaming, VideoQuality
+        from network.adaptive_streaming import AdaptiveStreaming, VideoQuality
         app.adaptive_streaming = AdaptiveStreaming(initial_quality=VideoQuality.MEDIUM)
         app.adaptive_streaming.start_monitoring()
     else:
