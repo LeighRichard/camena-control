@@ -106,6 +106,13 @@ ParseResult cmd_parse(const uint8_t* buffer, size_t len, Command* out)
     switch (out->type)
     {
         case CMD_POSITION:
+        case CMD_MOVE_ABSOLUTE:
+            out->axis = cmd_data[0];
+            out->value = (int32_t)(cmd_data[1] | (cmd_data[2] << 8) | 
+                                   (cmd_data[3] << 16) | (cmd_data[4] << 24));
+            break;
+            
+        case CMD_SET_VELOCITY:
             out->axis = cmd_data[0];
             out->value = (int32_t)(cmd_data[1] | (cmd_data[2] << 8) | 
                                    (cmd_data[3] << 16) | (cmd_data[4] << 24));
@@ -124,6 +131,7 @@ ParseResult cmd_parse(const uint8_t* buffer, size_t len, Command* out)
             
         case CMD_STATUS:
         case CMD_ESTOP:
+        case CMD_STOP:
             out->axis = AXIS_ALL;
             out->value = 0;
             break;

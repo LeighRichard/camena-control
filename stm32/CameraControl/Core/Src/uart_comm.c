@@ -20,6 +20,14 @@ static volatile uint16_t rx_tail = 0;
 static uint8_t tx_buffer[UART_TX_BUFFER_SIZE];
 static volatile uint8_t tx_busy = 0;
 
+/* 发送队列 (解决响应丢失问题) */
+#define TX_QUEUE_SIZE 4
+static uint8_t tx_queue[TX_QUEUE_SIZE][UART_TX_BUFFER_SIZE];
+static volatile uint8_t tx_queue_len[TX_QUEUE_SIZE];
+static volatile uint8_t tx_queue_head = 0;
+static volatile uint8_t tx_queue_tail = 0;
+static volatile uint8_t tx_queue_count = 0;
+
 /* 单字节接收缓冲 */
 static uint8_t rx_byte;
 
@@ -47,6 +55,11 @@ void uart_comm_init(void)
     parse_state = STATE_WAIT_HEAD;
     frame_idx = 0;
     frame_len = 0;
+    
+    /* 初始化发送队列 */
+    tx_queue_head = 0;
+    tx_queue_tail = 0;
+    tx_queue_count = 0;
     
     /* 启动中断接收 */
     HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
@@ -104,6 +117,25 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     if (huart->Instance == USART1)
     {
         tx_busy = 0;
+        
+        /* 检查发送队列中是否有待发送的数据 */
+        if (tx_queue_count > 0)
+        {
+            /* 从队列取出数据发送 */
+            uint8_t len = tx_queue_len[tx_queue_tail];
+            if (len > 0 && len <= UART_TX_BUFFER_SIZE)
+            {
+                memcpy(tx_buffer, tx_queue[tx_queue_tail], len);
+                tx_queue_tail = (tx_queue_tail + 1) % TX_QUEUE_SIZE;
+                tx_queue_count--;
+                
+                tx_busy = 1;
+                if (HAL_UART_Transmit_DMA(&huart1, tx_buffer, len) != HAL_OK)
+                {
+                    tx_busy = 0;
+                }
+            }
+        }
     }
 }
 
@@ -204,21 +236,31 @@ void uart_comm_process(CommandCallback callback)
 
 /**
  * @brief 发送响应
- * @note  如果上一次发送未完成，此次发送将被丢弃
- *        可以考虑添加发送队列来解决此问题
+ * @note  使用发送队列，避免响应丢失
  */
 void uart_comm_send_response(const Response* rsp)
 {
-    if (tx_busy) return;
-    
     size_t len = cmd_encode(rsp, tx_buffer);
-    if (len > 0 && len <= UART_TX_BUFFER_SIZE)
+    if (len == 0 || len > UART_TX_BUFFER_SIZE) return;
+    
+    /* 如果当前没有在发送，直接发送 */
+    if (!tx_busy)
     {
         tx_busy = 1;
         if (HAL_UART_Transmit_DMA(&huart1, tx_buffer, len) != HAL_OK)
         {
-            /* DMA 发送失败，重置忙标志 */
             tx_busy = 0;
         }
+        return;
     }
+    
+    /* 如果正在发送，加入队列 */
+    if (tx_queue_count < TX_QUEUE_SIZE)
+    {
+        memcpy(tx_queue[tx_queue_head], tx_buffer, len);
+        tx_queue_len[tx_queue_head] = len;
+        tx_queue_head = (tx_queue_head + 1) % TX_QUEUE_SIZE;
+        tx_queue_count++;
+    }
+    /* 队列满时丢弃 (可根据需要添加错误计数) */
 }

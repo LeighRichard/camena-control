@@ -564,3 +564,49 @@ void motion_set_limit_max(uint8_t axis, int32_t value)
             break;
     }
 }
+
+void motion_set_velocity(uint8_t axis, float velocity)
+{
+    /* 设置指定轴的目标速度 */
+    if (velocity < 0) velocity = -velocity;  /* 取绝对值 */
+    if (velocity > motion_profile.max_velocity) velocity = motion_profile.max_velocity;
+    
+    switch (axis) {
+        case AXIS_PAN:
+            scurve_pan.target_velocity = velocity;
+            break;
+        case AXIS_TILT:
+            scurve_tilt.target_velocity = velocity;
+            break;
+        case AXIS_RAIL:
+            scurve_rail.target_velocity = velocity;
+            break;
+        case AXIS_ALL:
+            scurve_pan.target_velocity = velocity;
+            scurve_tilt.target_velocity = velocity;
+            scurve_rail.target_velocity = velocity;
+            break;
+    }
+}
+
+void motion_stop_all(void)
+{
+    /* 停止所有轴的运动 */
+    is_moving = false;
+    stable_counter = 0;
+    
+    /* 停止所有定时器 */
+    set_stepper_frequency(&htim1, 0);
+    set_stepper_frequency(&htim2, 0);
+    set_stepper_frequency(&htim3, 0);
+    
+    /* 重置S曲线状态 */
+    scurve_pan.active = false;
+    scurve_tilt.active = false;
+    scurve_rail.active = false;
+    
+    /* 重置PID积分 */
+    pid_reset(&pid_pan);
+    pid_reset(&pid_tilt);
+    pid_reset(&pid_rail);
+}

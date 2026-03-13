@@ -36,6 +36,9 @@ typedef enum {
     CMD_CONFIG      = 0x03,     /* 参数配置 */
     CMD_ESTOP       = 0x04,     /* 急停 */
     CMD_HOME        = 0x05,     /* 归零 */
+    CMD_SET_VELOCITY = 0x06,    /* 速度控制 */
+    CMD_STOP        = 0x07,     /* 停止运动 */
+    CMD_MOVE_ABSOLUTE = 0x08,   /* 绝对位置移动 */
 } CommandType;
 
 /* 响应类型 */
@@ -45,6 +48,9 @@ typedef enum {
     RSP_CONFIG      = 0x83,
     RSP_ESTOP       = 0x84,
     RSP_HOME        = 0x85,
+    RSP_SET_VELOCITY = 0x86,
+    RSP_STOP        = 0x87,
+    RSP_MOVE_ABSOLUTE = 0x88,
 } ResponseType;
 
 /* 轴定义 */

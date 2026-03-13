@@ -77,6 +77,8 @@ void motion_set_pid_i(uint8_t axis, float i);
 void motion_set_pid_d(uint8_t axis, float d);
 void motion_set_limit_min(uint8_t axis, int32_t value);
 void motion_set_limit_max(uint8_t axis, int32_t value);
+void motion_set_velocity(uint8_t axis, float velocity);
+void motion_stop_all(void);
 
 /* 轴定义 (与 protocol.h 保持一致) */
 #ifndef AXIS_PAN

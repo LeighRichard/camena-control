@@ -338,6 +338,24 @@ static void process_command(const Command* cmd)
       rsp.type = RSP_HOME;
       break;
       
+    case CMD_SET_VELOCITY:
+      /* 设置目标速度 (value 为速度值，单位：步/秒) */
+      motion_set_velocity(cmd->axis, (float)cmd->value);
+      rsp.type = RSP_SET_VELOCITY;
+      break;
+      
+    case CMD_STOP:
+      /* 停止所有轴的运动 */
+      motion_stop_all();
+      rsp.type = RSP_STOP;
+      break;
+      
+    case CMD_MOVE_ABSOLUTE:
+      /* 绝对位置移动 */
+      motion_move_to(cmd->axis, cmd->value);
+      rsp.type = RSP_MOVE_ABSOLUTE;
+      break;
+      
     default:
       rsp.status = STATUS_ERROR;
       rsp.type = (ResponseType)(cmd->type | 0x80);

@@ -9,8 +9,16 @@
 #include <string.h>
 
 /* ADC 句柄（需要在 main.c 中定义并导出） */
+/* 如果ADC未初始化，这些指针将为NULL，过流/过温检测将被跳过 */
+#ifdef ADC_ENABLED
 extern ADC_HandleTypeDef hadc1;
 extern ADC_HandleTypeDef hadc2;
+static ADC_HandleTypeDef* adc1_ptr = &hadc1;
+static ADC_HandleTypeDef* adc2_ptr = &hadc2;
+#else
+static ADC_HandleTypeDef* adc1_ptr = NULL;
+static ADC_HandleTypeDef* adc2_ptr = NULL;
+#endif
 
 /* 电流和温度阈值 */
 #define CURRENT_THRESHOLD_MA     2000.0f   /* 过流阈值 2A */
@@ -217,23 +225,28 @@ static void read_limit_switches(void)
 
 static bool check_overcurrent(void)
 {
+    /* 如果ADC未初始化，跳过过流检测 */
+    if (adc1_ptr == NULL) {
+        return false;
+    }
+    
     /* 读取电流传感器 ADC (使用 ADC1 通道 0) */
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_0;
     sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
     
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+    if (HAL_ADC_ConfigChannel(adc1_ptr, &sConfig) != HAL_OK) {
         return false;
     }
     
     /* 启动 ADC 转换 */
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
+    HAL_ADC_Start(adc1_ptr);
+    HAL_ADC_PollForConversion(adc1_ptr, 10);
     
     /* 读取 ADC 值 */
-    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
+    uint32_t adc_value = HAL_ADC_GetValue(adc1_ptr);
+    HAL_ADC_Stop(adc1_ptr);
     
     /* 转换为电压 */
     float voltage = (adc_value / ADC_RESOLUTION) * ADC_REFERENCE_VOLTAGE;
@@ -251,23 +264,28 @@ static bool check_overcurrent(void)
 
 static bool check_overheat(void)
 {
+    /* 如果ADC未初始化，跳过过温检测 */
+    if (adc2_ptr == NULL) {
+        return false;
+    }
+    
     /* 读取温度传感器 ADC (使用 ADC2 通道 1) */
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_1;
     sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
     
-    if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK) {
+    if (HAL_ADC_ConfigChannel(adc2_ptr, &sConfig) != HAL_OK) {
         return false;
     }
     
     /* 启动 ADC 转换 */
-    HAL_ADC_Start(&hadc2);
-    HAL_ADC_PollForConversion(&hadc2, 10);
+    HAL_ADC_Start(adc2_ptr);
+    HAL_ADC_PollForConversion(adc2_ptr, 10);
     
     /* 读取 ADC 值 */
-    uint32_t adc_value = HAL_ADC_GetValue(&hadc2);
-    HAL_ADC_Stop(&hadc2);
+    uint32_t adc_value = HAL_ADC_GetValue(adc2_ptr);
+    HAL_ADC_Stop(adc2_ptr);
     
     /* 转换为电压 */
     float voltage = (adc_value / ADC_RESOLUTION) * ADC_REFERENCE_VOLTAGE;
