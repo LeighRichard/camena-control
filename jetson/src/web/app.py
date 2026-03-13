@@ -93,7 +93,7 @@ def create_app(config: Optional[WebConfig] = None):
     import os
     
     config = config or WebConfig()
-    static_folder = os.path.join(os.path.dirname(__file__), 'static')
+    static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
     app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
     app.config["SECRET_KEY"] = config.secret_key
     CORS(app)
