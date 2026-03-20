@@ -7,6 +7,12 @@
 #include "main.h"
 #include "motion.h"
 #include <string.h>
+#include <math.h>
+
+/* ADC 头文件（如果 ADC_ENABLED 定义） */
+#ifdef ADC_ENABLED
+#include "adc.h"
+#endif
 
 /* ADC 句柄（需要在 main.c 中定义并导出） */
 /* 如果ADC未初始化，这些指针将为NULL，过流/过温检测将被跳过 */

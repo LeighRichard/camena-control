@@ -65,8 +65,8 @@ typedef struct {
     float target_velocity;      /* 目标速度 */
     float direction;            /* 运动方向 (+1/-1) */
     uint8_t phase;              /* 当前阶段 (0-6) */
-    bool complete;              /* 是否完成 */
-    bool active;                /* 是否激活 */
+    uint8_t complete;           /* 是否完成 (使用 uint8_t 替代 bool) */
+    uint8_t active;             /* 是否激活 (使用 uint8_t 替代 bool) */
 } SCurveState;
 
 static SCurveState scurve_pan;
@@ -139,7 +139,7 @@ static void scurve_init(SCurveState* state, float start, float target)
     state->target_position = target;
     state->direction = (target >= start) ? 1.0f : -1.0f;
     state->phase = 0;
-    state->complete = (fabsf(target - start) < 0.1f);
+    state->complete = (fabsf(target - start) < 0.1f) ? 1 : 0;
 }
 
 static float scurve_update(SCurveState* state, float dt)
@@ -181,7 +181,7 @@ static float scurve_update(SCurveState* state, float dt)
                 state->acceleration = 0.0f;
                 state->velocity = 0.0f;
                 state->position = state->target_position;
-                state->complete = true;
+                state->complete = 1;
                 return state->position;
             }
             break;
@@ -198,7 +198,7 @@ static float scurve_update(SCurveState* state, float dt)
     {
         state->position = state->target_position;
         state->velocity = 0.0f;
-        state->complete = true;
+        state->complete = 1;
     }
     
     return state->position;
@@ -272,9 +272,9 @@ void motion_stop(void)
     
     /* 更新状态 */
     target_position = current_position;
-    scurve_pan.complete = true;
-    scurve_tilt.complete = true;
-    scurve_rail.complete = true;
+    scurve_pan.complete = 1;
+    scurve_tilt.complete = 1;
+    scurve_rail.complete = 1;
     scurve_pan.velocity = 0.0f;
     scurve_tilt.velocity = 0.0f;
     scurve_rail.velocity = 0.0f;
@@ -603,9 +603,9 @@ void motion_stop_all(void)
     set_stepper_frequency(&htim3, 0);
     
     /* 重置S曲线状态 */
-    scurve_pan.active = false;
-    scurve_tilt.active = false;
-    scurve_rail.active = false;
+    scurve_pan.active = 0;
+    scurve_tilt.active = 0;
+    scurve_rail.active = 0;
     
     /* 重置PID积分 */
     pid_reset(&pid_pan);
