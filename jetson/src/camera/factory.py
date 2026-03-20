@@ -99,7 +99,9 @@ class CameraFactory:
             """尝试创建指定后端的控制器"""
             controller = None
             try:
-                module = __import__(f'.{module_name}', package='camera', fromlist=[class_name])
+                # 使用 importlib 动态导入模块
+                import importlib
+                module = importlib.import_module(f'.{module_name}', package='camera')
                 controller_class = getattr(module, class_name)
                 
                 controller = controller_class()
