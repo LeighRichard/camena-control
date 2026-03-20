@@ -130,6 +130,7 @@ class CameraFactory:
         
         # 按优先级尝试不同的后端
         backends = [
+            ('orbbec_controller_openni2', 'OrbbecControllerOpenNI2', 'OpenNI2 ctypes'),
             ('orbbec_controller_openni2_python', 'OrbbecControllerOpenNI2Python', 'OpenNI2 Python'),
             ('orbbec_controller_ros', 'OrbbecControllerROS', 'ROS OpenNI2'),
             ('orbbec_controller_openni2_direct', 'OrbbecControllerOpenNI2Direct', 'OpenNI2直接'),
