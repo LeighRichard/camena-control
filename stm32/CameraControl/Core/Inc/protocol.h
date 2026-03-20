@@ -53,7 +53,12 @@ typedef enum {
     RSP_MOVE_ABSOLUTE = 0x88,
 } ResponseType;
 
-/* 轴定义 */
+/* 轴定义 - 取消 motion.h 中的宏定义，使用枚举 */
+#undef AXIS_PAN
+#undef AXIS_TILT
+#undef AXIS_RAIL
+#undef AXIS_ALL
+
 typedef enum {
     AXIS_PAN        = 0x00,
     AXIS_TILT       = 0x01,

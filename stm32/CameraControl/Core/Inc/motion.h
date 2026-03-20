@@ -80,15 +80,13 @@ void motion_set_limit_max(uint8_t axis, int32_t value);
 void motion_set_velocity(uint8_t axis, float velocity);
 void motion_stop_all(void);
 
-/* 轴定义 - 使用 protocol.h 中的枚举 */
-/* 如果 protocol.h 未包含，提供默认定义 */
-#ifndef __PROTOCOL_H
-typedef enum {
-    AXIS_PAN    = 0x00,
-    AXIS_TILT   = 0x01,
-    AXIS_RAIL   = 0x02,
-    AXIS_ALL    = 0xFF,
-} AxisType;
+/* 轴定义 - 使用宏，避免与 protocol.h 枚举冲突 */
+/* 这些宏与 protocol.h 中的 AxisType 枚举值相同 */
+#ifndef AXIS_PAN
+#define AXIS_PAN    0x00
+#define AXIS_TILT   0x01
+#define AXIS_RAIL   0x02
+#define AXIS_ALL    0xFF
 #endif
 
 #endif /* __MOTION_H */
