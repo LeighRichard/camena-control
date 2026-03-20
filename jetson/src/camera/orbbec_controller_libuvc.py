@@ -241,40 +241,47 @@ class OrbbecControllerLibUVC(BaseCameraController):
             # 订阅相机话题
             logger.info("订阅相机话题...")
             
-            # 尝试多个可能的彩色图像话题
+            # 尝试多个可能的彩色图像话题（按优先级排序）
             color_topics = [
+                '/image_raw',              # libuvc_camera 默认话题
                 '/camera/color/image_raw',
                 '/camera/rgb/image_raw',
                 '/camera/image_raw',
-                '/image_raw'
             ]
             
             depth_topics = [
+                '/depth/image_raw',
                 '/camera/depth/image_raw',
                 '/camera/depth/image',
-                '/depth/image_raw'
             ]
+            
+            # 获取已发布的话题列表
+            try:
+                published_topics = [t[0] for t in rospy.get_published_topics()]
+                logger.info(f"已发布的话题: {published_topics}")
+            except Exception as e:
+                logger.warning(f"获取话题列表失败: {e}")
+                published_topics = []
             
             # 订阅彩色图像
             for topic in color_topics:
-                try:
-                    # 先检查话题是否存在
-                    topics_list = rospy.get_published_topics()
-                    if any(topic in t[0] for t in topics_list):
+                if topic in published_topics:
+                    try:
                         self._color_subscriber = rospy.Subscriber(
                             topic, Image, self._color_callback, queue_size=1
                         )
                         logger.info(f"✓ 已订阅彩色图像话题: {topic}")
                         break
-                except Exception as e:
-                    logger.debug(f"订阅 {topic} 失败: {e}")
+                    except Exception as e:
+                        logger.warning(f"订阅 {topic} 失败: {e}")
             
             # 如果没有找到已发布的话题，订阅默认话题（等待发布者）
             if self._color_subscriber is None:
+                default_topic = '/image_raw'
                 self._color_subscriber = rospy.Subscriber(
-                    '/camera/color/image_raw', Image, self._color_callback, queue_size=1
+                    default_topic, Image, self._color_callback, queue_size=1
                 )
-                logger.info("已订阅默认彩色图像话题: /camera/color/image_raw (等待发布者)")
+                logger.info(f"已订阅默认彩色图像话题: {default_topic} (等待发布者)")
             
             # 订阅深度图像
             for topic in depth_topics:
