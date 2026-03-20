@@ -232,6 +232,7 @@ static bool check_overcurrent(void)
         return false;
     }
     
+#ifdef HAL_ADC_MODULE_ENABLED
     /* 读取电流传感器 ADC (使用 ADC1 通道 0) */
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_0;
@@ -260,6 +261,7 @@ static bool check_overcurrent(void)
     if (motor_current_ma > CURRENT_THRESHOLD_MA) {
         return true;
     }
+#endif
     
     return false;
 }
@@ -271,6 +273,7 @@ static bool check_overheat(void)
         return false;
     }
     
+#ifdef HAL_ADC_MODULE_ENABLED
     /* 读取温度传感器 ADC (使用 ADC2 通道 1) */
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_1;
@@ -303,6 +306,7 @@ static bool check_overheat(void)
     if (motor_temperature_c > TEMPERATURE_THRESHOLD_C) {
         return true;
     }
+#endif
     
     return false;
 }
