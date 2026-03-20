@@ -62,9 +62,11 @@ typedef struct {
     float velocity;             /* 当前速度 */
     float acceleration;         /* 当前加速度 */
     float target_position;      /* 目标位置 */
+    float target_velocity;      /* 目标速度 */
     float direction;            /* 运动方向 (+1/-1) */
     uint8_t phase;              /* 当前阶段 (0-6) */
     bool complete;              /* 是否完成 */
+    bool active;                /* 是否激活 */
 } SCurveState;
 
 static SCurveState scurve_pan;
