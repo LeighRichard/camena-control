@@ -226,10 +226,70 @@ class OrbbecControllerLibUVC(BaseCameraController):
             
             logger.info("libuvc_camera 节点已启动")
             
-            # 跳过 ROS 节点初始化和话题订阅
-            # 用户应该使用 rqt_image_view 查看图像
-            logger.info("✓ 相机节点已启动")
-            logger.info("提示: 使用 rqt_image_view 查看图像")
+            # 初始化 ROS 节点（如果还没有初始化）
+            if not self._ros_node_initialized:
+                try:
+                    # 检查是否已经有 ROS 节点在运行
+                    if not rospy.core.is_initialized():
+                        rospy.init_node('orbbec_libuvc_controller', anonymous=True, disable_signals=True)
+                    self._ros_node_initialized = True
+                    logger.info("ROS 节点已初始化")
+                except Exception as e:
+                    logger.warning(f"ROS 节点初始化警告: {e}")
+                    self._ros_node_initialized = True
+            
+            # 订阅相机话题
+            logger.info("订阅相机话题...")
+            
+            # 尝试多个可能的彩色图像话题
+            color_topics = [
+                '/camera/color/image_raw',
+                '/camera/rgb/image_raw',
+                '/camera/image_raw',
+                '/image_raw'
+            ]
+            
+            depth_topics = [
+                '/camera/depth/image_raw',
+                '/camera/depth/image',
+                '/depth/image_raw'
+            ]
+            
+            # 订阅彩色图像
+            for topic in color_topics:
+                try:
+                    # 先检查话题是否存在
+                    topics_list = rospy.get_published_topics()
+                    if any(topic in t[0] for t in topics_list):
+                        self._color_subscriber = rospy.Subscriber(
+                            topic, Image, self._color_callback, queue_size=1
+                        )
+                        logger.info(f"✓ 已订阅彩色图像话题: {topic}")
+                        break
+                except Exception as e:
+                    logger.debug(f"订阅 {topic} 失败: {e}")
+            
+            # 如果没有找到已发布的话题，订阅默认话题（等待发布者）
+            if self._color_subscriber is None:
+                self._color_subscriber = rospy.Subscriber(
+                    '/camera/color/image_raw', Image, self._color_callback, queue_size=1
+                )
+                logger.info("已订阅默认彩色图像话题: /camera/color/image_raw (等待发布者)")
+            
+            # 订阅深度图像
+            for topic in depth_topics:
+                try:
+                    topics_list = rospy.get_published_topics()
+                    if any(topic in t[0] for t in topics_list):
+                        self._depth_subscriber = rospy.Subscriber(
+                            topic, Image, self._depth_callback, queue_size=1
+                        )
+                        logger.info(f"✓ 已订阅深度图像话题: {topic}")
+                        break
+                except Exception as e:
+                    logger.debug(f"订阅 {topic} 失败: {e}")
+            
+            logger.info("✓ 相机节点已启动，话题已订阅")
             
             self._status = CameraStatus.READY
             self._device_info = {'name': 'Orbbec Camera (libuvc)'}
