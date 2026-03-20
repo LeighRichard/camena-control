@@ -64,6 +64,7 @@ class OrbbecControllerLibUVC(BaseCameraController):
     
     def __init__(self):
         self._ros_process = None
+        self._roscore_process = None
         self._status = CameraStatus.DISCONNECTED
         self._camera_config = CameraConfig(
             width=self.DEFAULT_COLOR_WIDTH,
@@ -187,6 +188,34 @@ class OrbbecControllerLibUVC(BaseCameraController):
             catkin_ws = os.path.expanduser("~/catkin_ws/devel/setup.bash")
             env = os.environ.copy()
             env['ROS_PACKAGE_PATH'] = f"{os.path.expanduser('~/catkin_ws/src')}:{env.get('ROS_PACKAGE_PATH', '')}"
+            
+            # 检查 roscore 是否运行
+            logger.info("检查 ROS master...")
+            roscore_running = False
+            try:
+                result = subprocess.run(
+                    ['rosnode', 'list'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    roscore_running = True
+                    logger.info("ROS master 已运行")
+            except Exception:
+                pass
+            
+            # 如果 roscore 没有运行，启动它
+            if not roscore_running:
+                logger.info("启动 roscore...")
+                self._roscore_process = subprocess.Popen(
+                    ['roscore'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                # 等待 roscore 启动
+                time.sleep(3)
+                logger.info("roscore 已启动")
             
             # 启动 libuvc_camera 节点
             logger.info("启动 libuvc_camera 节点...")
@@ -444,5 +473,18 @@ class OrbbecControllerLibUVC(BaseCameraController):
                 self._ros_process.kill()
             finally:
                 self._ros_process = None
+        
+        # 停止 roscore（如果是我们启动的）
+        if self._roscore_process is not None:
+            try:
+                self._roscore_process.terminate()
+                self._roscore_process.wait(timeout=3)
+                logger.info("roscore 已停止")
+            except Exception as e:
+                logger.error(f"停止 roscore 时出错: {e}")
+                if self._roscore_process.poll() is None:
+                    self._roscore_process.kill()
+            finally:
+                self._roscore_process = None
         
         self._status = CameraStatus.DISCONNECTED
