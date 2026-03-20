@@ -6,22 +6,20 @@
 #include "safety.h"
 #include "main.h"
 #include "motion.h"
+#include "adc.h"
 #include <string.h>
 #include <math.h>
 
-/* ADC 头文件 */
-#include "adc.h"
-
 /* ADC 句柄（需要在 main.c 中定义并导出） */
 /* 如果ADC未初始化，这些指针将为NULL，过流/过温检测将被跳过 */
-#ifdef ADC_ENABLED
+#ifdef HAL_ADC_MODULE_ENABLED
 extern ADC_HandleTypeDef hadc1;
 extern ADC_HandleTypeDef hadc2;
 static ADC_HandleTypeDef* adc1_ptr = &hadc1;
 static ADC_HandleTypeDef* adc2_ptr = &hadc2;
 #else
-static ADC_HandleTypeDef* adc1_ptr = NULL;
-static ADC_HandleTypeDef* adc2_ptr = NULL;
+static void* adc1_ptr = NULL;
+static void* adc2_ptr = NULL;
 #endif
 
 /* 电流和温度阈值 */
