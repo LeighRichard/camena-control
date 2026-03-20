@@ -255,23 +255,11 @@ class OrbbecControllerLibUVC(BaseCameraController):
             
             logger.info("libuvc_camera 节点已启动")
             
-            # 初始化 ROS 节点（如果还没有初始化）
-            if not self._ros_node_initialized:
-                try:
-                    # 直接初始化 ROS 节点（匿名模式允许重复调用）
-                    logger.info("正在初始化 ROS 节点...")
-                    rospy.init_node('orbbec_libuvc_controller', anonymous=True, disable_signals=True)
-                    self._ros_node_initialized = True
-                    logger.info("ROS 节点已初始化")
-                except rospy.exceptions.ROSInitException as e:
-                    # 节点已存在，忽略错误
-                    logger.info(f"ROS 节点已存在: {e}")
-                    self._ros_node_initialized = True
-                except Exception as e:
-                    logger.warning(f"ROS 节点初始化警告: {e}")
-                    self._ros_node_initialized = True
+            # 等待话题发布
+            logger.info("等待相机话题发布...")
+            time.sleep(2)  # 等待话题发布
             
-            # 订阅相机话题
+            # 订阅相机话题（不需要初始化 ROS 节点，使用已有的节点）
             logger.info("订阅相机话题...")
             
             # 尝试多个可能的彩色图像话题（按优先级排序）
@@ -288,46 +276,15 @@ class OrbbecControllerLibUVC(BaseCameraController):
                 '/camera/depth/image',
             ]
             
-            # 获取已发布的话题列表
+            # 直接订阅默认话题（libuvc_camera 发布 /image_raw）
+            default_topic = '/image_raw'
             try:
-                published_topics = [t[0] for t in rospy.get_published_topics()]
-                logger.info(f"已发布的话题: {published_topics}")
-            except Exception as e:
-                logger.warning(f"获取话题列表失败: {e}")
-                published_topics = []
-            
-            # 订阅彩色图像
-            for topic in color_topics:
-                if topic in published_topics:
-                    try:
-                        self._color_subscriber = rospy.Subscriber(
-                            topic, Image, self._color_callback, queue_size=1
-                        )
-                        logger.info(f"✓ 已订阅彩色图像话题: {topic}")
-                        break
-                    except Exception as e:
-                        logger.warning(f"订阅 {topic} 失败: {e}")
-            
-            # 如果没有找到已发布的话题，订阅默认话题（等待发布者）
-            if self._color_subscriber is None:
-                default_topic = '/image_raw'
                 self._color_subscriber = rospy.Subscriber(
                     default_topic, Image, self._color_callback, queue_size=1
                 )
-                logger.info(f"已订阅默认彩色图像话题: {default_topic} (等待发布者)")
-            
-            # 订阅深度图像
-            for topic in depth_topics:
-                try:
-                    topics_list = rospy.get_published_topics()
-                    if any(topic in t[0] for t in topics_list):
-                        self._depth_subscriber = rospy.Subscriber(
-                            topic, Image, self._depth_callback, queue_size=1
-                        )
-                        logger.info(f"✓ 已订阅深度图像话题: {topic}")
-                        break
-                except Exception as e:
-                    logger.debug(f"订阅 {topic} 失败: {e}")
+                logger.info(f"✓ 已订阅彩色图像话题: {default_topic}")
+            except Exception as e:
+                logger.warning(f"订阅 {default_topic} 失败: {e}")
             
             logger.info("✓ 相机节点已启动，话题已订阅")
             
