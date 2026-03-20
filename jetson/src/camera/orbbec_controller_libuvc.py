@@ -80,6 +80,8 @@ class OrbbecControllerLibUVC(BaseCameraController):
         self._depth_subscriber = None
         self._lock = threading.Lock()
         self._ros_node_initialized = False
+        self._spin_thread = None
+        self._spinning = False
         
         # 创建深度处理器
         self._depth_processor = DepthProcessor(
@@ -289,6 +291,12 @@ class OrbbecControllerLibUVC(BaseCameraController):
             except Exception as e:
                 logger.warning(f"订阅 {default_topic} 失败: {e}")
             
+            # 启动后台 spin 线程
+            self._spinning = True
+            self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
+            self._spin_thread.start()
+            logger.info("ROS spin 线程已启动")
+            
             logger.info("✓ 相机节点已启动，话题已订阅")
             
             self._status = CameraStatus.READY
@@ -300,6 +308,16 @@ class OrbbecControllerLibUVC(BaseCameraController):
             self._last_error = str(e)
             logger.error(f"相机初始化失败: {e}")
             return False, str(e)
+    
+    def _spin_loop(self):
+        """后台 ROS spin 循环"""
+        while self._spinning:
+            try:
+                rospy.spin_once(timeout_sec=0.1)
+            except Exception as e:
+                if self._spinning:
+                    logger.debug(f"spin_once 错误: {e}")
+            time.sleep(0.01)
     
     def capture(self, wait_frames: int = None, position: Tuple[float, float, float] = None) -> Tuple[Optional[ImagePair], str]:
         """
@@ -321,17 +339,9 @@ class OrbbecControllerLibUVC(BaseCameraController):
         self._status = CameraStatus.CAPTURING
         
         try:
-            # 等待新帧，同时处理 ROS 回调
+            # 等待新帧（后台 spin 线程会处理 ROS 回调）
             wait_time = wait_frames * 0.033  # 约 30fps
-            start_time = time.time()
-            
-            while time.time() - start_time < wait_time:
-                # 处理 ROS 回调
-                try:
-                    rospy.spin_once(timeout_sec=0.01)
-                except Exception:
-                    pass
-                time.sleep(0.01)
+            time.sleep(wait_time)
             
             # 获取最新图像
             with self._lock:
@@ -414,6 +424,17 @@ class OrbbecControllerLibUVC(BaseCameraController):
     
     def close(self):
         """关闭相机"""
+        # 停止 spin 线程
+        self._spinning = False
+        if self._spin_thread is not None:
+            try:
+                self._spin_thread.join(timeout=2.0)
+                logger.info("ROS spin 线程已停止")
+            except Exception:
+                pass
+            finally:
+                self._spin_thread = None
+        
         # 取消订阅
         if self._color_subscriber is not None:
             try:
