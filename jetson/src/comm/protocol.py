@@ -48,6 +48,9 @@ class ResponseType(IntEnum):
     CONFIG = 0x83
     ESTOP = 0x84
     HOME = 0x85
+    SET_VELOCITY = 0x86
+    STOP = 0x87
+    MOVE_ABSOLUTE = 0x88
 
 
 class AxisType(IntEnum):
