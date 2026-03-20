@@ -396,8 +396,11 @@ def create_app(config: Optional[WebConfig] = None):
     def camera_status():
         """获取相机状态"""
         if app.camera_controller:
+            status = app.camera_controller.get_status()
+            # 兼容字符串和枚举类型
+            status_value = status.value if hasattr(status, 'value') else status
             return jsonify({
-                "status": app.camera_controller.get_status().value,
+                "status": status_value,
                 "config": app.camera_controller.get_config().to_dict()
             })
         return jsonify({"error": "相机未初始化"}), 500
