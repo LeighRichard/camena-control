@@ -138,30 +138,61 @@ class OrbbecControllerROSOpenNI2(BaseCameraController):
         """启动 openni2_camera 节点"""
         logger.info("启动 openni2_camera 节点...")
         
-        # 使用 roslaunch
-        self._openni2_proc = subprocess.Popen(
+        # 先检查是否已有节点在运行
+        try:
+            result = subprocess.run(['rostopic', 'list'], capture_output=True, text=True, timeout=5)
+            if '/camera/depth/image_raw' in result.stdout or '/camera/depth_registered/image_raw' in result.stdout:
+                logger.info("openni2_camera 节点已在运行")
+                return True
+        except:
+            pass
+        
+        # 尝试不同的启动方式
+        launch_commands = [
             ['roslaunch', 'openni2_launch', 'openni2.launch'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+            ['roslaunch', 'openni2_camera', 'camera.launch'],
+            ['rosrun', 'openni2_camera', 'openni2_camera_node'],
+        ]
         
-        # 等待话题发布
-        for _ in range(60):
+        for cmd in launch_commands:
             try:
-                result = subprocess.run(
-                    ['rostopic', 'list'],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
+                logger.info(f"尝试: {' '.join(cmd)}")
+                self._openni2_proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
                 )
-                if '/camera/depth/image_raw' in result.stdout or '/camera/depth_registered/image_raw' in result.stdout:
-                    logger.info("openni2_camera 节点已启动")
-                    return True
-            except:
-                pass
-            time.sleep(0.5)
+                
+                # 等待话题发布
+                for _ in range(40):
+                    try:
+                        result = subprocess.run(['rostopic', 'list'], capture_output=True, text=True, timeout=2)
+                        topics = result.stdout
+                        if '/camera/depth/image_raw' in topics or '/camera/depth_registered/image_raw' in topics:
+                            logger.info(f"✓ openni2_camera 节点已启动")
+                            return True
+                        # 也检查彩色话题
+                        if '/camera/color/image_raw' in topics or '/camera/rgb/image_raw' in topics:
+                            logger.info(f"✓ openni2_camera 节点已启动 (彩色)")
+                            return True
+                    except:
+                        pass
+                    time.sleep(0.5)
+                
+                # 这个命令不行，终止并尝试下一个
+                if self._openni2_proc:
+                    self._openni2_proc.terminate()
+                    self._openni2_proc.wait(timeout=3)
+                    self._openni2_proc = None
+                    
+            except FileNotFoundError:
+                logger.debug(f"命令不存在: {cmd[0]}")
+                continue
+            except Exception as e:
+                logger.debug(f"启动失败: {e}")
+                continue
         
-        logger.error("openni2_camera 节点启动超时")
+        logger.error("openni2_camera 节点启动失败")
         return False
     
     def _color_callback(self, msg):
