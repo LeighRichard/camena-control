@@ -1,0 +1,99 @@
+# Remote Access Configuration Example
+# 远程访问配置示例
+
+# 4G Modem Configuration
+# 4G 模块配置
+modem:
+  enabled: true
+  protocol: qmi  # qmi or ppp
+  apn: internet  # 根据运营商修改
+  device: /dev/cdc-wdm0
+  interface: wwan0
+  username: null  # 如果需要
+  password: null  # 如果需要
+  pin: null  # SIM 卡 PIN 码
+
+# Tunnel Configuration (FRP or ngrok)
+# 内网穿透配置
+tunnel:
+  enabled: true
+  type: frp  # frp or ngrok
+  
+  # FRP Configuration
+  frp:
+    server_addr: your-frp-server.com
+    server_port: 7000
+    token: your-secret-token
+    local_port: 5000
+    subdomain: camera-system  # 子域名
+    # custom_domains: camera.yourdomain.com  # 自定义域名
+  
+  # Ngrok Configuration (alternative)
+  ngrok:
+    authtoken: your-ngrok-authtoken
+    region: us  # us, eu, ap, au, sa, jp, in
+    local_port: 5000
+  
+  # Auto-reconnect settings
+  auto_reconnect: true
+  reconnect_delay: 5  # seconds
+  max_reconnect_attempts: 0  # 0 = infinite
+
+# Authentication Configuration
+# 身份认证配置
+auth:
+  enabled: true
+  secret_key: change-this-to-random-secret-key
+  token_expiry_hours: 24
+  
+  # Default users (change passwords after first login!)
+  # 默认用户（首次登录后请修改密码！）
+  users:
+    - username: admin
+      password: admin123
+      role: admin
+    - username: operator
+      password: operator123
+      role: operator
+    - username: viewer
+      password: viewer123
+      role: viewer
+
+# Adaptive Streaming Configuration
+# 自适应流配置
+streaming:
+  enabled: true
+  initial_quality: medium  # low, medium, high, ultra
+  adaptation_interval: 5  # seconds
+  bandwidth_safety_margin: 0.8  # Use 80% of available bandwidth
+  
+  # Quality profiles (can be customized)
+  profiles:
+    low:
+      width: 640
+      height: 480
+      fps: 10
+      jpeg_quality: 50
+    medium:
+      width: 1280
+      height: 720
+      fps: 15
+      jpeg_quality: 70
+    high:
+      width: 1280
+      height: 720
+      fps: 25
+      jpeg_quality: 85
+    ultra:
+      width: 1920
+      height: 1080
+      fps: 30
+      jpeg_quality: 95
+
+# Web Server Configuration
+# Web 服务器配置
+web:
+  host: 0.0.0.0
+  port: 5000
+  enable_auth: true
+  enable_adaptive_streaming: true

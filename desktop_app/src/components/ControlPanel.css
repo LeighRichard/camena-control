@@ -1,0 +1,38 @@
+.control-panel {
+  height: 120px;
+  background-color: #2a2a2a;
+  border-top: 1px solid #3a3a3a;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.control-section {
+  flex: 1;
+}
+
+.control-section h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: #ccc;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.control-button {
+  padding: 10px 20px;
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.control-button:hover {
+  background-color: #3a8eef;
+}

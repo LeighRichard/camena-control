@@ -1,0 +1,63 @@
+# 系统监控配置文件
+
+# 监控配置
+monitoring:
+  # 监控间隔（秒）
+  interval: 5.0
+  
+  # 历史记录数量
+  history_size: 100
+  
+  # 告警持续时间（秒）- 指标超过阈值多久后才触发告警
+  alert_duration: 30.0
+
+# CPU 告警阈值
+cpu:
+  warning: 70.0      # 警告阈值 (%)
+  critical: 90.0     # 严重阈值 (%)
+
+# 内存告警阈值
+memory:
+  warning: 75.0      # 警告阈值 (%)
+  critical: 90.0     # 严重阈值 (%)
+
+# 温度告警阈值（Jetson Nano）
+temperature:
+  warning: 70.0      # 警告阈值 (°C)
+  critical: 85.0     # 严重阈值 (°C)
+
+# 磁盘告警阈值
+disk:
+  warning: 80.0      # 警告阈值 (%)
+  critical: 95.0     # 严重阈值 (%)
+
+# 告警通知渠道
+alerts:
+  # 启用的通知渠道
+  enabled_channels:
+    - log              # 日志
+    # - email          # 邮件（需配置）
+    # - webhook        # Webhook（需配置）
+    # - desktop        # 桌面通知
+  
+  # 告警去重时间窗口（秒）
+  dedup_window: 300
+  
+  # 最大历史记录数
+  max_history: 1000
+  
+  # 邮件配置（可选）
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "your-email@gmail.com"
+    password: "your-app-password"
+    to_addresses:
+      - "admin@example.com"
+  
+  # Webhook 配置（可选）
+  webhook:
+    url: "http://localhost:8080/api/monitoring/webhook"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"

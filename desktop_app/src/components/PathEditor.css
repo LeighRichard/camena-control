@@ -1,0 +1,124 @@
+.path-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.path-header {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.path-name-input {
+  flex: 1;
+  padding: 10px;
+  background-color: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.path-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  flex: 1;
+}
+
+.path-list,
+.point-editor {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.path-list h4,
+.point-editor h4 {
+  margin-bottom: 16px;
+  font-size: 16px;
+  color: #ccc;
+}
+
+.empty-message,
+.empty-editor p {
+  color: #666;
+  text-align: center;
+  padding: 32px;
+}
+
+.points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.point-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: #2a2a2a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.point-item:hover {
+  background-color: #3a3a3a;
+}
+
+.point-item.selected {
+  background-color: #4a9eff;
+}
+
+.point-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #4a9eff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.point-info {
+  flex: 1;
+  font-size: 13px;
+}
+
+.point-info div {
+  margin-bottom: 2px;
+}
+
+.delete-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.delete-button:hover {
+  background-color: #d32f2f;
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.editor-form .form-group {
+  margin-bottom: 0;
+}
+
+.editor-form input {
+  max-width: none;
+}
