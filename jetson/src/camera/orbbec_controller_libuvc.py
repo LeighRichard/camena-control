@@ -259,6 +259,7 @@ class OrbbecControllerLibUVC(BaseCameraController):
             if not self._ros_node_initialized:
                 try:
                     # 直接初始化 ROS 节点（匿名模式允许重复调用）
+                    logger.info("正在初始化 ROS 节点...")
                     rospy.init_node('orbbec_libuvc_controller', anonymous=True, disable_signals=True)
                     self._ros_node_initialized = True
                     logger.info("ROS 节点已初始化")
