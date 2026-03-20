@@ -230,10 +230,16 @@ class OrbbecControllerLibUVC(BaseCameraController):
             if not self._ros_node_initialized:
                 try:
                     # 检查是否已经有 ROS 节点在运行
-                    if not rospy.core.is_initialized():
+                    try:
+                        # 尝试获取 ROS master，检查是否已连接
+                        rospy.get_rostime()
+                        self._ros_node_initialized = True
+                        logger.info("ROS 节点已存在")
+                    except Exception:
+                        # 需要初始化新的 ROS 节点
                         rospy.init_node('orbbec_libuvc_controller', anonymous=True, disable_signals=True)
-                    self._ros_node_initialized = True
-                    logger.info("ROS 节点已初始化")
+                        self._ros_node_initialized = True
+                        logger.info("ROS 节点已初始化")
                 except Exception as e:
                     logger.warning(f"ROS 节点初始化警告: {e}")
                     self._ros_node_initialized = True
