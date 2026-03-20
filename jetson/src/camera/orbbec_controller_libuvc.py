@@ -144,6 +144,9 @@ class OrbbecControllerLibUVC(BaseCameraController):
                 cv_image = self._cv_bridge.imgmsg_to_cv2(msg, "bgr8")
                 with self._lock:
                     self._latest_color_image = cv_image
+                logger.debug(f"收到彩色图像: {cv_image.shape}")
+            else:
+                logger.warning(f"cv_bridge 未初始化: cv_bridge={self._cv_bridge}, available={CV_BRIDGE_AVAILABLE}")
         except Exception as e:
             logger.error(f"彩色图像回调失败: {e}")
     
@@ -318,13 +321,23 @@ class OrbbecControllerLibUVC(BaseCameraController):
         self._status = CameraStatus.CAPTURING
         
         try:
-            # 等待新帧
-            time.sleep(wait_frames * 0.033)  # 约 30fps
+            # 等待新帧，同时处理 ROS 回调
+            wait_time = wait_frames * 0.033  # 约 30fps
+            start_time = time.time()
+            
+            while time.time() - start_time < wait_time:
+                # 处理 ROS 回调
+                try:
+                    rospy.spin_once(timeout_sec=0.01)
+                except Exception:
+                    pass
+                time.sleep(0.01)
             
             # 获取最新图像
             with self._lock:
                 if self._latest_color_image is None:
                     self._status = CameraStatus.READY
+                    logger.warning("capture: 未收到彩色图像数据")
                     return None, "未收到彩色图像数据"
                 
                 # 复制图像
