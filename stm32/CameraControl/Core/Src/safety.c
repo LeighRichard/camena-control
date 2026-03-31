@@ -233,9 +233,9 @@ static bool check_overcurrent(void)
     }
     
 #ifdef HAL_ADC_MODULE_ENABLED
-    /* 读取电流传感器 ADC (使用 ADC1 通道 0) */
+    /* 读取电流传感器 ADC (使用 ADC1 通道 2, PA2) */
     ADC_ChannelConfTypeDef sConfig = {0};
-    sConfig.Channel = ADC_CHANNEL_0;
+    sConfig.Channel = ADC_CHANNEL_2;
     sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
     
@@ -274,7 +274,7 @@ static bool check_overheat(void)
     }
     
 #ifdef HAL_ADC_MODULE_ENABLED
-    /* 读取温度传感器 ADC (使用 ADC2 通道 1) */
+    /* 读取温度传感器 ADC (使用 ADC2 通道 1, PA1) */
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_1;
     sConfig.Rank = 1;

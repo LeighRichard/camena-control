@@ -29,7 +29,7 @@ ADC_HandleTypeDef hadc2;
 /* ADC1 初始化 */
 void MX_ADC1_Init(void)
 {
-    /* ADC1 配置 - 用于电流检测 */
+    /* ADC1 配置 - 用于电流检测 (PA2 / ADC1_IN2) */
     hadc1.Instance = ADC1;
     hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
     hadc1.Init.Resolution = ADC_RESOLUTION_12B;
@@ -52,7 +52,7 @@ void MX_ADC1_Init(void)
 /* ADC2 初始化 */
 void MX_ADC2_Init(void)
 {
-    /* ADC2 配置 - 用于温度检测 */
+    /* ADC2 配置 - 用于温度检测 (PA1 / ADC2_IN1) */
     hadc2.Instance = ADC2;
     hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
     hadc2.Init.Resolution = ADC_RESOLUTION_12B;
@@ -69,6 +69,30 @@ void MX_ADC2_Init(void)
     if (HAL_ADC_Init(&hadc2) != HAL_OK)
     {
         Error_Handler();
+    }
+}
+
+void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
+{
+    if (adcHandle->Instance == ADC1)
+    {
+        __HAL_RCC_ADC1_CLK_ENABLE();
+    }
+    else if (adcHandle->Instance == ADC2)
+    {
+        __HAL_RCC_ADC2_CLK_ENABLE();
+    }
+}
+
+void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
+{
+    if (adcHandle->Instance == ADC1)
+    {
+        __HAL_RCC_ADC1_CLK_DISABLE();
+    }
+    else if (adcHandle->Instance == ADC2)
+    {
+        __HAL_RCC_ADC2_CLK_DISABLE();
     }
 }
 
