@@ -32,7 +32,8 @@ try:
     from vision.face_recognition import FaceRecognizer, FaceInfo
     from camera.controller import CameraController, ImagePair
     from comm.manager import CommManager
-    from comm.protocol import Command, CommandType
+    from comm.protocol import Command, CommandType, AxisType
+    from comm.unit_converter import UnitConverter
     from control.pid import PIDController
     from control.kalman import KalmanFilter, TargetTracker
 except ImportError:
@@ -41,7 +42,8 @@ except ImportError:
     from src.vision.face_recognition import FaceRecognizer, FaceInfo
     from src.camera.controller import CameraController, ImagePair
     from src.comm.manager import CommManager
-    from src.comm.protocol import Command, CommandType
+    from src.comm.protocol import Command, CommandType, AxisType
+    from src.comm.unit_converter import UnitConverter
     from src.control.pid import PIDController
     from src.control.kalman import KalmanFilter, TargetTracker
 
@@ -373,11 +375,21 @@ class VisualServoController(
         if pan == 0 and tilt == 0 and rail == 0:
             return
         
-        cmd = Command(
-            cmd_type=CommandType.SET_VELOCITY,
-            data={'pan': pan, 'tilt': tilt, 'rail': rail}
-        )
-        self._comm.send_command(cmd, wait_response=False)
+        def to_signed_steps(speed: float, axis_name: str) -> int:
+            steps = UnitConverter.speed_to_steps(abs(speed), axis_name)
+            return -steps if speed < 0 else steps
+        
+        commands = []
+        if pan != 0:
+            commands.append((AxisType.PAN, to_signed_steps(pan, 'pan')))
+        if tilt != 0:
+            commands.append((AxisType.TILT, to_signed_steps(tilt, 'tilt')))
+        if rail != 0:
+            commands.append((AxisType.RAIL, to_signed_steps(rail, 'rail')))
+        
+        for axis, value in commands:
+            cmd = Command(type=CommandType.SET_VELOCITY, axis=axis, value=value)
+            self._comm.send_command(cmd, wait_response=False)
     
     def _send_stop_command(self):
         """发送停止指令"""
@@ -386,12 +398,16 @@ class VisualServoController(
     
     def _move_to_position(self, pan: float, tilt: float, rail: float = None):
         """移动到指定位置"""
-        data = {'pan': pan, 'tilt': tilt}
+        commands = [
+            (AxisType.PAN, int(pan * 100)),   # 度 -> 0.01 度
+            (AxisType.TILT, int(tilt * 100)), # 度 -> 0.01 度
+        ]
         if rail is not None:
-            data['rail'] = rail
+            commands.append((AxisType.RAIL, int(rail * 100)))  # mm -> 0.01 mm
         
-        cmd = Command(type=CommandType.MOVE_ABSOLUTE, data=data)
-        self._comm.send_command(cmd, wait_response=True)
+        for idx, (axis, value) in enumerate(commands):
+            cmd = Command(type=CommandType.MOVE_ABSOLUTE, axis=axis, value=value)
+            self._comm.send_command(cmd, wait_response=(idx == len(commands) - 1))
     
     def _update_fps(self):
         """更新 FPS"""

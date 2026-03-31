@@ -28,6 +28,7 @@ flask>=2.0.0
 flask-cors>=3.0.10
 flask-socketio>=5.1.0
 python-socketio>=5.4.0
+PyJWT>=2.4.0
 
 # 串口通信
 pyserial>=3.5

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .protocol import (
-    Command, Response, 
+    Command, CommandType, Response, 
     encode_command, decode_response,
     FRAME_HEAD, FRAME_TAIL,
     get_next_seq, reset_seq
@@ -259,8 +259,15 @@ class CommManager:
             # 检查是否超时未收到数据
             elapsed = time.time() - self._last_recv_time
             if elapsed > self.config.heartbeat_timeout + self.config.heartbeat_interval:
-                logger.warning(f"心跳超时 ({elapsed:.1f}s)，连接可能已断开")
-                self._handle_connection_lost("心跳超时")
+                # 主动发送心跳探测，避免“链路空闲但健康”被误判为断线
+                heartbeat_cmd = Command(type=CommandType.STATUS)
+                response, error = self.send_command(heartbeat_cmd, wait_response=True)
+                if response is not None:
+                    self._last_recv_time = time.time()
+                    continue
+                
+                logger.warning(f"心跳探测失败 ({elapsed:.1f}s): {error}")
+                self._handle_connection_lost("心跳探测失败")
                 break
     
     def _handle_connection_lost(self, reason: str):

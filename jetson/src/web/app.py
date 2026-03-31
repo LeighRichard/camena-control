@@ -64,7 +64,7 @@ class WebConfig:
     secret_key: str = field(default_factory=get_secret_key)
     video_fps: int = 15
     video_quality: int = 80
-    enable_auth: bool = True  # 启用身份认证
+    enable_auth: bool = False  # 启用身份认证
     enable_adaptive_streaming: bool = True  # 启用自适应流
     ssl: SSLConfig = None  # SSL 配置
     
@@ -346,7 +346,7 @@ def create_app(config: Optional[WebConfig] = None):
                     cmd = Command(
                         type=CommandType.POSITION,
                         axis=AxisType.RAIL,
-                        value=int(rail * 10)  # 转换为整数（假设单位是0.1mm）
+                        value=int(rail * 100)  # 转换为整数（0.01mm）
                     )
                     success, response = app.comm_manager.send_command(cmd)
                     if not success:

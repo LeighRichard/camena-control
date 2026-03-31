@@ -14,17 +14,17 @@ logger = logging.getLogger(__name__)
 # 硬件参数常量（与 STM32 motion.h 保持一致）
 STEPS_PER_REV_PAN = 3200    # Pan 轴每圈步数 (200 步 × 16 细分)
 STEPS_PER_REV_TILT = 3200   # Tilt 轴每圈步数
-STEPS_PER_MM_RAIL = 80      # Rail 轴每毫米步数
+STEPS_PER_MM_RAIL = 1600    # Rail 轴每毫米步数
 
 # STM32 硬件限制（步/秒）
 MAX_SPEED_PAN_STEPS = 1000   # Pan 轴最大速度
 MAX_SPEED_TILT_STEPS = 800   # Tilt 轴最大速度
-MAX_SPEED_RAIL_STEPS = 500   # Rail 轴最大速度
+MAX_SPEED_RAIL_STEPS = 16000  # Rail 轴最大速度
 
 # STM32 硬件限制（步/秒²）
 MAX_ACCEL_PAN_STEPS = 500    # Pan 轴最大加速度
 MAX_ACCEL_TILT_STEPS = 400   # Tilt 轴最大加速度
-MAX_ACCEL_RAIL_STEPS = 300   # Rail 轴最大加速度
+MAX_ACCEL_RAIL_STEPS = 16000  # Rail 轴最大加速度
 
 # 运动范围限制
 PAN_MIN_ANGLE = -180.0

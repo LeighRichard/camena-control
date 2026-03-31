@@ -9,7 +9,7 @@
 - 详细的错误信息
 """
 
-from typing import Optional, List, Any
+from typing import Optional, List
 from dataclasses import dataclass, field
 import logging
 
@@ -17,10 +17,19 @@ logger = logging.getLogger(__name__)
 
 # 尝试导入 Pydantic，如果不可用则使用简单验证
 try:
-    from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+    from pydantic import BaseModel, Field
+    try:
+        from pydantic import ConfigDict, field_validator
+        PYDANTIC_V2 = True
+    except ImportError:
+        # Pydantic v1 兼容
+        from pydantic import validator as field_validator
+        ConfigDict = None
+        PYDANTIC_V2 = False
     PYDANTIC_AVAILABLE = True
 except ImportError:
     PYDANTIC_AVAILABLE = False
+    PYDANTIC_V2 = False
     logger.warning("Pydantic 未安装，将使用简单验证模式")
 
 
@@ -33,8 +42,16 @@ class ConfigValidationError(Exception):
 
 if PYDANTIC_AVAILABLE:
     # ==================== Pydantic 模型 ====================
+
+    if PYDANTIC_V2:
+        class PydanticConfigModel(BaseModel):
+            model_config = ConfigDict(extra="ignore")  # 忽略额外字段
+    else:
+        class PydanticConfigModel(BaseModel):
+            class Config:
+                extra = "ignore"
     
-    class CameraConfigModel(BaseModel):
+    class CameraConfigModel(PydanticConfigModel):
         """相机配置验证模型"""
         enabled: bool = True
         required: bool = False
@@ -66,10 +83,8 @@ if PYDANTIC_AVAILABLE:
                 logger.warning(f"非标准帧率: {v}，建议使用: {supported}")
             return v
         
-        model_config = ConfigDict(extra="ignore")  # 忽略额外字段
-    
-    
-    class CommConfigModel(BaseModel):
+
+    class CommConfigModel(PydanticConfigModel):
         """串口通信配置验证模型"""
         enabled: bool = True
         required: bool = False
@@ -90,10 +105,8 @@ if PYDANTIC_AVAILABLE:
                 raise ValueError("串口端口不能为空")
             return v
         
-        model_config = ConfigDict(extra="ignore")
 
-
-    class DetectionConfigModel(BaseModel):
+    class DetectionConfigModel(PydanticConfigModel):
         """目标检测配置验证模型"""
         enabled: bool = True
         model_path: str = "models/yolov5s.engine"
@@ -102,18 +115,15 @@ if PYDANTIC_AVAILABLE:
         target_classes: List[str] = Field(default_factory=list)
 
         @field_validator('confidence_threshold', 'nms_threshold')
-        @classmethod
-        def validate_threshold(cls, v, info):
+        def validate_threshold(cls, v):
             if v < 0.1:
-                logger.warning(f"{info.field_name} 值过低 ({v})，可能导致过多误检")
+                logger.warning(f"检测阈值过低 ({v})，可能导致过多误检")
             if v > 0.9:
-                logger.warning(f"{info.field_name} 值过高 ({v})，可能导致漏检")
+                logger.warning(f"检测阈值过高 ({v})，可能导致漏检")
             return v
 
-        model_config = ConfigDict(extra='ignore')
-    
-    
-    class FaceRecognitionConfigModel(BaseModel):
+
+    class FaceRecognitionConfigModel(PydanticConfigModel):
         """人脸识别配置验证模型"""
         enabled: bool = True
         database_path: str = "face_database"
@@ -128,39 +138,31 @@ if PYDANTIC_AVAILABLE:
                 raise ValueError(f"不支持的后端: {v}，支持: {supported}")
             return v
         
-        model_config = ConfigDict(extra="ignore")
-    
-    
-    class VisualServoConfigModel(BaseModel):
+
+    class VisualServoConfigModel(PydanticConfigModel):
         """视觉伺服配置验证模型"""
         enabled: bool = True
         center_tolerance: int = Field(default=30, ge=1, le=200)
         max_pan_speed: float = Field(default=30.0, ge=1.0, le=180.0)
         max_tilt_speed: float = Field(default=20.0, ge=1.0, le=90.0)
-        max_rail_speed: float = Field(default=50.0, ge=1.0, le=500.0)
+        max_rail_speed: float = Field(default=6.0, ge=1.0, le=500.0)
         prediction_enabled: bool = True
         
-        model_config = ConfigDict(extra="ignore")
-    
-    
-    class SchedulerConfigModel(BaseModel):
+
+    class SchedulerConfigModel(PydanticConfigModel):
         """调度器配置验证模型"""
         enabled: bool = True
         default_path: Optional[str] = None
         
-        model_config = ConfigDict(extra="ignore")
-    
-    
-    class SSLConfigModel(BaseModel):
+
+    class SSLConfigModel(PydanticConfigModel):
         """SSL/TLS 配置验证模型"""
         enabled: bool = False
         cert_file: str = "certs/cert.pem"
         key_file: str = "certs/key.pem"
         
-        model_config = ConfigDict(extra="ignore")
-    
-    
-    class WebConfigModel(BaseModel):
+
+    class WebConfigModel(PydanticConfigModel):
         """Web 服务配置验证模型"""
         enabled: bool = True
         host: str = "0.0.0.0"
@@ -182,10 +184,8 @@ if PYDANTIC_AVAILABLE:
                 logger.warning(f"端口 {v} 小于 1024，可能需要 root 权限")
             return v
         
-        model_config = ConfigDict(extra="ignore")
-    
-    
-    class SystemConfigModel(BaseModel):
+
+    class SystemConfigModel(PydanticConfigModel):
         """系统总配置验证模型"""
         camera: CameraConfigModel = Field(default_factory=CameraConfigModel)
         comm: CommConfigModel = Field(default_factory=CommConfigModel)
@@ -194,8 +194,6 @@ if PYDANTIC_AVAILABLE:
         visual_servo: VisualServoConfigModel = Field(default_factory=VisualServoConfigModel)
         scheduler: SchedulerConfigModel = Field(default_factory=SchedulerConfigModel)
         web: WebConfigModel = Field(default_factory=WebConfigModel)
-        
-        model_config = ConfigDict(extra="ignore")
 
 
 else:
@@ -241,7 +239,7 @@ else:
         center_tolerance: int = 30
         max_pan_speed: float = 30.0
         max_tilt_speed: float = 20.0
-        max_rail_speed: float = 50.0
+        max_rail_speed: float = 6.0
         prediction_enabled: bool = True
     
     @dataclass

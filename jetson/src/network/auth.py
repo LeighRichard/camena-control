@@ -10,6 +10,8 @@ import hashlib
 import secrets
 import time
 import logging
+import hmac
+import os
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 from enum import Enum
@@ -93,6 +95,7 @@ class AuthManager:
         """
         self.secret_key = secret_key or secrets.token_urlsafe(32)
         self.token_expiry_hours = token_expiry_hours
+        self._pbkdf2_iterations = 120000
         
         # In-memory user storage (in production, use database)
         self.users: Dict[str, User] = {}
@@ -103,21 +106,55 @@ class AuthManager:
     
     def _create_default_admin(self):
         """Create default admin user"""
-        default_password = "admin123"  # Should be changed on first login
+        default_username = os.environ.get("CAMERA_CONTROL_ADMIN_USER", "admin")
+        default_password = os.environ.get("CAMERA_CONTROL_ADMIN_PASSWORD")
+        if not default_password:
+            default_password = secrets.token_urlsafe(12)
+            logger.warning(
+                "CAMERA_CONTROL_ADMIN_PASSWORD not set; generated one-time admin password for this process. "
+                "Set CAMERA_CONTROL_ADMIN_PASSWORD for deterministic startup credentials."
+            )
+
         password_hash = self._hash_password(default_password)
         
         admin = User(
-            username="admin",
+            username=default_username,
             password_hash=password_hash,
             role=UserRole.ADMIN
         )
         
-        self.users["admin"] = admin
-        logger.info("Default admin user created (username: admin, password: admin123)")
+        self.users[default_username] = admin
+        logger.info("Default admin user created (username: %s)", default_username)
     
     def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256"""
-        return hashlib.sha256(password.encode()).hexdigest()
+        """Hash password using PBKDF2-HMAC-SHA256 with per-user salt."""
+        salt = secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            self._pbkdf2_iterations
+        ).hex()
+        return f"pbkdf2_sha256${self._pbkdf2_iterations}${salt}${digest}"
+
+    def _verify_password(self, password: str, stored_hash: str) -> bool:
+        """Verify password hash, compatible with legacy unsalted SHA-256 hashes."""
+        if stored_hash.startswith("pbkdf2_sha256$"):
+            try:
+                _, iterations, salt, expected = stored_hash.split("$", 3)
+                actual = hashlib.pbkdf2_hmac(
+                    "sha256",
+                    password.encode("utf-8"),
+                    salt.encode("utf-8"),
+                    int(iterations)
+                ).hex()
+                return hmac.compare_digest(actual, expected)
+            except Exception:
+                return False
+
+        # Legacy fallback (for old in-memory user records)
+        legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(legacy, stored_hash)
     
     def create_user(self, username: str, password: str, role: UserRole) -> bool:
         """
@@ -163,7 +200,7 @@ class AuthManager:
             True if user deleted successfully
         """
         try:
-            if username == "admin":
+            if username in self.users and self.users[username].role == UserRole.ADMIN:
                 logger.error("Cannot delete admin user")
                 return False
             
@@ -204,9 +241,7 @@ class AuthManager:
                 return False
             
             user = self.users[username]
-            old_hash = self._hash_password(old_password)
-            
-            if user.password_hash != old_hash:
+            if not self._verify_password(old_password, user.password_hash):
                 logger.warning(f"Invalid old password for user {username}")
                 return False
             
@@ -241,9 +276,7 @@ class AuthManager:
                 logger.warning(f"Login failed: user {username} is disabled")
                 return None
             
-            password_hash = self._hash_password(password)
-            
-            if user.password_hash != password_hash:
+            if not self._verify_password(password, user.password_hash):
                 logger.warning(f"Login failed: invalid password for user {username}")
                 return None
             

@@ -110,7 +110,7 @@ class ServoConfig:
     # 速度限制（度/秒 或 mm/秒）
     max_pan_speed: float = 30.0
     max_tilt_speed: float = 20.0
-    max_rail_speed: float = 50.0
+    max_rail_speed: float = 6.0
     
     # 跟踪参数
     lost_timeout: float = 2.0       # 目标丢失超时（秒）

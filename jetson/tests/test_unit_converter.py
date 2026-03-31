@@ -50,18 +50,18 @@ class TestUnitConverter:
     def test_mm_to_steps(self):
         """测试毫米转步数"""
         # 1 mm = 80 步
-        assert UnitConverter.mm_to_steps(1.0) == 80
+        assert UnitConverter.mm_to_steps(1.0) == 1600
         # 10 mm = 800 步
-        assert UnitConverter.mm_to_steps(10.0) == 800
+        assert UnitConverter.mm_to_steps(10.0) == 16000
         # 0.5 mm = 40 步
-        assert UnitConverter.mm_to_steps(0.5) == 40
+        assert UnitConverter.mm_to_steps(0.5) == 800
     
     def test_steps_to_mm(self):
         """测试步数转毫米"""
         # 80 步 = 1 mm
-        assert abs(UnitConverter.steps_to_mm(80) - 1.0) < 0.01
+        assert abs(UnitConverter.steps_to_mm(1600) - 1.0) < 0.01
         # 800 步 = 10 mm
-        assert abs(UnitConverter.steps_to_mm(800) - 10.0) < 0.01
+        assert abs(UnitConverter.steps_to_mm(16000) - 10.0) < 0.01
     
     def test_speed_conversion_pan(self):
         """测试 Pan 速度转换"""
@@ -77,10 +77,10 @@ class TestUnitConverter:
         """测试 Rail 速度转换"""
         # 6 mm/秒 = 480 步/秒
         speed_steps = UnitConverter.speed_to_steps(6.0, 'rail')
-        assert speed_steps == 480
+        assert speed_steps == 9600
         
         # 反向转换
-        speed_mm = UnitConverter.steps_to_speed(480, 'rail')
+        speed_mm = UnitConverter.steps_to_speed(9600, 'rail')
         assert abs(speed_mm - 6.0) < 0.01
     
     def test_accel_conversion(self):
@@ -91,14 +91,14 @@ class TestUnitConverter:
         
         # Rail: 3 mm/秒² = 240 步/秒²
         accel_steps = UnitConverter.accel_to_steps(3.0, 'rail')
-        assert accel_steps == 240
+        assert accel_steps == 4800
     
     def test_convenience_functions(self):
         """测试便捷函数"""
         assert deg_to_steps(90, 'pan') == 800
         assert abs(steps_to_deg(800, 'pan') - 90.0) < 0.01
-        assert mm_to_steps(1.0) == 80
-        assert abs(steps_to_mm(80) - 1.0) < 0.01
+        assert mm_to_steps(1.0) == 1600
+        assert abs(steps_to_mm(1600) - 1.0) < 0.01
     
     def test_invalid_axis(self):
         """测试无效轴名称"""
@@ -194,8 +194,8 @@ class TestMotionValidator:
         valid, error = MotionValidator.validate_speed(50.0, 'rail')
         assert not valid
         assert 'Rail' in error
-        assert '4000' in error
-        assert '500' in error
+        assert '80000' in error
+        assert '16000' in error
     
     def test_validate_acceleration_rail(self):
         """测试 Rail 加速度验证"""
@@ -207,8 +207,8 @@ class TestMotionValidator:
         valid, error = MotionValidator.validate_acceleration(30.0, 'rail')
         assert not valid
         assert 'Rail' in error
-        assert '2400' in error
-        assert '300' in error
+        assert '48000' in error
+        assert '16000' in error
     
     def test_validate_motion_params(self):
         """测试完整运动参数验证"""

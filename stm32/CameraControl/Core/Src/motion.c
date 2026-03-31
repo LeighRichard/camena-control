@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file motion.c
  * @brief 运动控制模块实现 - PID 控制器和 S 曲线速度规划
  */
@@ -72,6 +72,10 @@ typedef struct {
 static SCurveState scurve_pan;
 static SCurveState scurve_tilt;
 static SCurveState scurve_rail;
+static bool has_active_velocity(const SCurveState* state)
+{
+    return fabsf(state->target_velocity) > 0.0001f;
+}
 
 /* 运动状态 */
 static bool is_moving = false;
@@ -218,6 +222,12 @@ void motion_init(void)
     
     memset(&current_position, 0, sizeof(Position));
     memset(&target_position, 0, sizeof(Position));
+    memset(&scurve_pan, 0, sizeof(scurve_pan));
+    memset(&scurve_tilt, 0, sizeof(scurve_tilt));
+    memset(&scurve_rail, 0, sizeof(scurve_rail));
+    scurve_pan.complete = 1;
+    scurve_tilt.complete = 1;
+    scurve_rail.complete = 1;
     
     is_moving = false;
     stable_counter = 0;
@@ -239,6 +249,9 @@ void motion_move_to_position(const Position* target)
     scurve_init(&scurve_pan, (float)current_position.pan_angle, (float)safe_target.pan_angle);
     scurve_init(&scurve_tilt, (float)current_position.tilt_angle, (float)safe_target.tilt_angle);
     scurve_init(&scurve_rail, (float)current_position.rail_pos, (float)safe_target.rail_pos);
+    scurve_pan.target_velocity = 0.0f;
+    scurve_tilt.target_velocity = 0.0f;
+    scurve_rail.target_velocity = 0.0f;
     
     pid_reset(&pid_pan);
     pid_reset(&pid_tilt);
@@ -281,6 +294,9 @@ void motion_stop(void)
     scurve_pan.acceleration = 0.0f;
     scurve_tilt.acceleration = 0.0f;
     scurve_rail.acceleration = 0.0f;
+    scurve_pan.target_velocity = 0.0f;
+    scurve_tilt.target_velocity = 0.0f;
+    scurve_rail.target_velocity = 0.0f;
     is_moving = false;
 }
 
@@ -302,7 +318,10 @@ int32_t motion_get_position(uint8_t axis)
 
 bool motion_is_complete(void)
 {
-    return scurve_pan.complete && scurve_tilt.complete && scurve_rail.complete;
+    return scurve_pan.complete && scurve_tilt.complete && scurve_rail.complete &&
+           !has_active_velocity(&scurve_pan) &&
+           !has_active_velocity(&scurve_tilt) &&
+           !has_active_velocity(&scurve_rail);
 }
 
 bool motion_is_stable(void)
@@ -389,53 +408,90 @@ static void set_stepper_frequency(TIM_HandleTypeDef* htim, uint32_t freq_hz)
 void motion_update(void)
 {
     const float dt = 0.001f;
-    
+
+    float actual_pan = (float)pan_step_count / STEPS_PER_DEGREE * 100.0f;
+    float actual_tilt = (float)tilt_step_count / STEPS_PER_DEGREE * 100.0f;
+    float actual_rail = (float)rail_step_count / STEPS_PER_MM * 100.0f;
+
+    bool pan_active = false;
+    bool tilt_active = false;
+    bool rail_active = false;
+
+    if (has_active_velocity(&scurve_pan))
+    {
+        HAL_GPIO_WritePin(PAN_DIR_GPIO_Port, PAN_DIR_Pin,
+                          scurve_pan.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        set_stepper_frequency(&htim1, (uint32_t)fminf(fabsf(scurve_pan.target_velocity), 50000.0f));
+        pan_active = true;
+    }
+    else if (!scurve_pan.complete)
+    {
+        float planned_pan = scurve_update(&scurve_pan, dt);
+        float output_pan = pid_compute(&pid_pan, planned_pan, actual_pan, dt);
+        HAL_GPIO_WritePin(PAN_DIR_GPIO_Port, PAN_DIR_Pin, output_pan >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        uint32_t freq_pan = (uint32_t)(fabsf(scurve_pan.velocity) * STEPS_PER_DEGREE / 100.0f);
+        set_stepper_frequency(&htim1, freq_pan);
+        pan_active = true;
+    }
+    else
+    {
+        set_stepper_frequency(&htim1, 0);
+    }
+
+    if (has_active_velocity(&scurve_tilt))
+    {
+        HAL_GPIO_WritePin(TILT_DIR_GPIO_Port, TILT_DIR_Pin,
+                          scurve_tilt.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        set_stepper_frequency(&htim2, (uint32_t)fminf(fabsf(scurve_tilt.target_velocity), 50000.0f));
+        tilt_active = true;
+    }
+    else if (!scurve_tilt.complete)
+    {
+        float planned_tilt = scurve_update(&scurve_tilt, dt);
+        float output_tilt = pid_compute(&pid_tilt, planned_tilt, actual_tilt, dt);
+        HAL_GPIO_WritePin(TILT_DIR_GPIO_Port, TILT_DIR_Pin, output_tilt >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        uint32_t freq_tilt = (uint32_t)(fabsf(scurve_tilt.velocity) * STEPS_PER_DEGREE / 100.0f);
+        set_stepper_frequency(&htim2, freq_tilt);
+        tilt_active = true;
+    }
+    else
+    {
+        set_stepper_frequency(&htim2, 0);
+    }
+
+    if (has_active_velocity(&scurve_rail))
+    {
+        HAL_GPIO_WritePin(RAIL_DIR_GPIO_Port, RAIL_DIR_Pin,
+                          scurve_rail.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        set_stepper_frequency(&htim3, (uint32_t)fminf(fabsf(scurve_rail.target_velocity), 50000.0f));
+        rail_active = true;
+    }
+    else if (!scurve_rail.complete)
+    {
+        float planned_rail = scurve_update(&scurve_rail, dt);
+        float output_rail = pid_compute(&pid_rail, planned_rail, actual_rail, dt);
+        HAL_GPIO_WritePin(RAIL_DIR_GPIO_Port, RAIL_DIR_Pin, output_rail >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        uint32_t freq_rail = (uint32_t)(fabsf(scurve_rail.velocity) * STEPS_PER_MM / 100.0f);
+        set_stepper_frequency(&htim3, freq_rail);
+        rail_active = true;
+    }
+    else
+    {
+        set_stepper_frequency(&htim3, 0);
+    }
+
+    current_position.pan_angle = (int32_t)actual_pan;
+    current_position.tilt_angle = (int32_t)actual_tilt;
+    current_position.rail_pos = (int32_t)actual_rail;
+
+    is_moving = pan_active || tilt_active || rail_active;
     if (!is_moving)
     {
         if (stable_counter < STABLE_THRESHOLD) stable_counter++;
         return;
     }
-    
-    float planned_pan = scurve_update(&scurve_pan, dt);
-    float planned_tilt = scurve_update(&scurve_tilt, dt);
-    float planned_rail = scurve_update(&scurve_rail, dt);
-    
-    float actual_pan = (float)pan_step_count / STEPS_PER_DEGREE * 100.0f;
-    float actual_tilt = (float)tilt_step_count / STEPS_PER_DEGREE * 100.0f;
-    float actual_rail = (float)rail_step_count / STEPS_PER_MM * 100.0f;
-    
-    float output_pan = pid_compute(&pid_pan, planned_pan, actual_pan, dt);
-    float output_tilt = pid_compute(&pid_tilt, planned_tilt, actual_tilt, dt);
-    float output_rail = pid_compute(&pid_rail, planned_rail, actual_rail, dt);
-    
-    HAL_GPIO_WritePin(PAN_DIR_GPIO_Port, PAN_DIR_Pin, output_pan >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(TILT_DIR_GPIO_Port, TILT_DIR_Pin, output_tilt >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(RAIL_DIR_GPIO_Port, RAIL_DIR_Pin, output_rail >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    
-    float velocity_pan = fabsf(scurve_pan.velocity);
-    float velocity_tilt = fabsf(scurve_tilt.velocity);
-    float velocity_rail = fabsf(scurve_rail.velocity);
-    
-    uint32_t freq_pan = (uint32_t)(velocity_pan * STEPS_PER_DEGREE / 100.0f);
-    uint32_t freq_tilt = (uint32_t)(velocity_tilt * STEPS_PER_DEGREE / 100.0f);
-    uint32_t freq_rail = (uint32_t)(velocity_rail * STEPS_PER_MM / 100.0f);
-    
-    set_stepper_frequency(&htim1, freq_pan);
-    set_stepper_frequency(&htim2, freq_tilt);
-    set_stepper_frequency(&htim3, freq_rail);
-    
-    current_position.pan_angle = (int32_t)actual_pan;
-    current_position.tilt_angle = (int32_t)actual_tilt;
-    current_position.rail_pos = (int32_t)actual_rail;
-    
-    if (motion_is_complete())
-    {
-        is_moving = false;
-        stable_counter = 0;
-        set_stepper_frequency(&htim1, 0);
-        set_stepper_frequency(&htim2, 0);
-        set_stepper_frequency(&htim3, 0);
-    }
+
+    stable_counter = 0;
 }
 
 void motion_plan_s_curve(const Position* start, const Position* end, const MotionProfile* profile)
@@ -569,9 +625,9 @@ void motion_set_limit_max(uint8_t axis, int32_t value)
 
 void motion_set_velocity(uint8_t axis, float velocity)
 {
-    /* 设置指定轴的目标速度 */
-    if (velocity < 0) velocity = -velocity;  /* 取绝对值 */
-    if (velocity > motion_profile.max_velocity) velocity = motion_profile.max_velocity;
+    /* Velocity commands are in steps/s and keep the sign for direction. */
+    if (velocity > 50000.0f) velocity = 50000.0f;
+    if (velocity < -50000.0f) velocity = -50000.0f;
     
     switch (axis) {
         case AXIS_PAN:
@@ -589,6 +645,9 @@ void motion_set_velocity(uint8_t axis, float velocity)
             scurve_rail.target_velocity = velocity;
             break;
     }
+
+    is_moving = true;
+    stable_counter = 0;
 }
 
 void motion_stop_all(void)
@@ -601,6 +660,12 @@ void motion_stop_all(void)
     set_stepper_frequency(&htim1, 0);
     set_stepper_frequency(&htim2, 0);
     set_stepper_frequency(&htim3, 0);
+    scurve_pan.target_velocity = 0.0f;
+    scurve_tilt.target_velocity = 0.0f;
+    scurve_rail.target_velocity = 0.0f;
+    scurve_pan.complete = 1;
+    scurve_tilt.complete = 1;
+    scurve_rail.complete = 1;
     
     /* 重置S曲线状态 */
     scurve_pan.active = 0;

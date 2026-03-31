@@ -1,0 +1,436 @@
+[03/13 06:08:55.006430][error][25729][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 06:08:55.006589][error][25729][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 06:08:55.011628][error][25729][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 06:08:55.011684][error][25729][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 06:08:55.012267][error][25729][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 06:08:55.012300][error][25729][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/13 06:08:55.013343][info][25729][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/13 06:08:55.013393][info][25729][DeviceManager.cpp:25] Current found device(s): (1)
+[03/13 06:08:55.013411][info][25729][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 06:08:55.013428][info][25729][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/13 06:08:57.021455][info][25729][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/13 06:08:57.021507][info][25729][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 06:08:57.071505][error][25729][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 06:08:57.173037][error][25729][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 06:08:57.273206][warning][25729][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/13 06:08:57.350326][info][25729][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/13 06:08:57.350367][info][25729][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/13 02:38:37.916315][error][8880][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 02:38:37.918533][error][8880][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 02:38:37.923358][error][8880][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 02:38:37.923398][error][8880][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 02:38:37.923916][error][8880][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 02:38:37.923976][error][8880][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/13 02:38:37.924993][info][8880][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/13 02:38:37.925042][info][8880][DeviceManager.cpp:25] Current found device(s): (1)
+[03/13 02:38:37.925062][info][8880][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 02:38:37.925079][info][8880][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/13 02:38:39.933005][info][8880][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/13 02:38:39.933065][info][8880][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 02:38:39.993344][error][8880][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 02:38:40.094927][error][8880][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 02:38:40.195173][warning][8880][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/13 02:38:40.260135][info][8880][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/13 02:38:40.260178][info][8880][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/13 02:49:46.888249][error][9881][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 02:49:46.888371][error][9881][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 02:49:46.893308][error][9881][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 02:49:46.893351][error][9881][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 02:49:46.893890][error][9881][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 02:49:46.893924][error][9881][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/13 02:49:46.895115][info][9881][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/13 02:49:46.895194][info][9881][DeviceManager.cpp:25] Current found device(s): (1)
+[03/13 02:49:46.895214][info][9881][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 02:49:46.895231][info][9881][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/13 02:49:48.903088][info][9881][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/13 02:49:48.903142][info][9881][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 02:49:48.960480][error][9881][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 02:49:49.062198][error][9881][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 02:49:49.162459][warning][9881][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/13 02:49:49.228259][info][9881][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/13 02:49:49.228303][info][9881][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/13 05:02:45.514352][error][24967][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 05:02:45.514989][error][24967][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 05:02:45.519640][error][24967][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 05:02:45.519708][error][24967][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 05:02:45.520788][error][24967][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 05:02:45.520836][error][24967][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/13 05:02:45.522628][info][24967][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/13 05:02:45.522686][info][24967][DeviceManager.cpp:25] Current found device(s): (1)
+[03/13 05:02:45.522703][info][24967][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 05:02:45.522719][info][24967][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/13 05:02:47.531333][info][24967][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/13 05:02:47.531397][info][24967][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 05:02:47.541117][warning][24967][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-19.0, Return Code: -6]
+[03/13 05:04:02.720261][error][25048][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 05:04:02.720380][error][25048][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 05:04:02.725436][error][25048][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 05:04:02.725474][error][25048][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/13 05:04:02.725962][error][25048][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/13 05:04:02.725986][error][25048][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/13 05:04:02.726939][info][25048][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/13 05:04:02.726994][info][25048][DeviceManager.cpp:25] Current found device(s): (1)
+[03/13 05:04:02.727014][info][25048][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 05:04:02.727031][info][25048][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/13 05:04:04.735512][info][25048][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/13 05:04:04.735573][info][25048][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/13 05:04:04.781345][error][25048][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 05:04:04.883356][error][25048][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/13 05:04:04.983595][warning][25048][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/13 05:04:05.052397][info][25048][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/13 05:04:05.052481][info][25048][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/16 14:12:48.941509][error][29880][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:12:48.941594][error][29880][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:12:48.946283][error][29880][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:12:48.946330][error][29880][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:12:48.946804][error][29880][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:12:48.946830][error][29880][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:12:48.948032][info][29880][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:12:48.948081][info][29880][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:12:48.948099][info][29880][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:12:48.948116][info][29880][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:12:50.955820][info][29880][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:12:50.955878][info][29880][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:12:51.087924][error][29880][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:12:51.670690][error][29880][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:12:51.770949][warning][29880][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/16 14:12:51.839490][info][29880][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/16 14:12:51.839530][info][29880][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/16 14:14:42.437602][error][30132][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:14:42.437686][error][30132][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:14:42.442974][error][30132][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:14:42.443030][error][30132][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:14:42.443738][error][30132][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:14:42.443771][error][30132][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:14:42.444808][info][30132][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:14:42.444858][info][30132][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:14:42.444876][info][30132][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:14:42.444894][info][30132][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:14:44.453666][info][30132][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:14:44.453728][info][30132][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:14:44.497773][error][30132][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:14:44.599458][error][30132][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:14:44.699688][warning][30132][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/16 14:14:44.768124][info][30132][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/16 14:14:44.768436][info][30132][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/16 14:17:58.203377][error][30598][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:17:58.203479][error][30598][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:17:58.208664][error][30598][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:17:58.208774][error][30598][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:17:58.209382][error][30598][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:17:58.209445][error][30598][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:17:58.209803][info][30598][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:17:58.209844][info][30598][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:17:58.209887][info][30598][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:17:58.209928][info][30598][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:18:00.217813][info][30598][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:18:00.217872][info][30598][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:18:00.227480][warning][30598][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-19.0, Return Code: -6]
+[03/16 14:19:18.527061][error][30649][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:19:18.527156][error][30649][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:19:18.531817][error][30649][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:19:18.531861][error][30649][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:19:18.532403][error][30649][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:19:18.532433][error][30649][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:19:18.532668][info][30649][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:19:18.532706][info][30649][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:19:18.532720][info][30649][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:19:18.532733][info][30649][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:19:20.539562][info][30649][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:19:20.539625][info][30649][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:19:20.549149][warning][30649][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-19.0, Return Code: -6]
+[03/16 14:25:46.837582][error][30870][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:25:46.837668][error][30870][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:25:46.842555][error][30870][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:25:46.842598][error][30870][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:25:46.843219][error][30870][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:25:46.843254][error][30870][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:25:46.844743][info][30870][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:25:46.844801][info][30870][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:25:46.844822][info][30870][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:25:46.844841][info][30870][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:25:48.852226][info][30870][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:25:48.852287][info][30870][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:25:48.905506][error][30870][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:25:49.007076][error][30870][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:25:49.107343][warning][30870][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/16 14:25:49.175127][info][30870][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/16 14:25:49.175167][info][30870][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/16 14:27:29.709391][error][31146][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:27:29.709477][error][31146][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:27:29.714446][error][31146][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:27:29.714486][error][31146][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:27:29.715148][error][31146][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:27:29.715185][error][31146][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:27:29.716288][info][31146][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:27:29.716339][info][31146][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:27:29.716358][info][31146][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:27:29.716375][info][31146][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:27:31.724284][info][31146][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:27:31.724364][info][31146][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:27:31.770041][error][31146][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:27:31.871733][error][31146][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/16 14:27:31.971962][warning][31146][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/16 14:27:32.039592][info][31146][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/16 14:27:32.039638][info][31146][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/16 14:28:02.714326][error][31378][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:28:02.714415][error][31378][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:28:02.719379][error][31378][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:28:02.719437][error][31378][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/16 14:28:02.720050][error][31378][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/16 14:28:02.720091][error][31378][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/16 14:28:02.720681][info][31378][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/16 14:28:02.720732][info][31378][DeviceManager.cpp:25] Current found device(s): (1)
+[03/16 14:28:02.720750][info][31378][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:28:02.720764][info][31378][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/16 14:28:04.728784][info][31378][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/16 14:28:04.728843][info][31378][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/16 14:28:04.747436][warning][31378][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-22.0, Return Code: -6]
+[03/19 13:57:33.186520][error][7230][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 13:57:33.189145][error][7230][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 13:57:33.194054][error][7230][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 13:57:33.194093][error][7230][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 13:57:33.194849][error][7230][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 13:57:33.194884][error][7230][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 13:57:33.195850][info][7230][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 13:57:33.195899][info][7230][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 13:57:33.195919][info][7230][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 13:57:33.195937][info][7230][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 13:57:35.204877][info][7230][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 13:57:35.204933][info][7230][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 13:57:35.353562][error][7230][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/19 13:57:35.929318][error][7230][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/19 13:57:36.029560][warning][7230][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/19 13:57:36.097923][info][7230][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/19 13:57:36.097966][info][7230][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/19 15:02:00.519884][error][11358][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:02:00.521059][error][11358][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:02:00.525903][error][11358][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:02:00.525966][error][11358][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:02:00.526557][error][11358][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:02:00.526622][error][11358][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 15:02:00.526898][info][11358][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 15:02:00.526939][info][11358][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 15:02:00.526956][info][11358][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:02:00.526972][info][11358][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 15:02:02.535548][info][11358][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 15:02:02.535611][info][11358][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:02:02.545135][warning][11358][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-12.0, Return Code: -6]
+[03/19 15:02:38.786413][error][11414][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:02:38.786528][error][11414][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:02:38.791604][error][11414][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:02:38.791643][error][11414][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:02:38.792124][error][11414][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:02:38.792156][error][11414][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 15:02:38.793170][info][11414][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 15:02:38.793220][info][11414][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 15:02:38.793240][info][11414][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:02:38.793258][info][11414][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 15:02:40.801318][info][11414][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 15:02:40.801381][info][11414][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:02:40.866723][error][11414][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/19 15:02:40.968623][error][11414][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/19 15:02:41.068888][warning][11414][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/19 15:02:41.136083][info][11414][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/19 15:02:41.136124][info][11414][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/19 15:37:35.185887][error][12848][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:37:35.185979][error][12848][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:37:35.190945][error][12848][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:37:35.191008][error][12848][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:37:35.191554][error][12848][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:37:35.191599][error][12848][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 15:37:35.191917][info][12848][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 15:37:35.191958][info][12848][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 15:37:35.191973][info][12848][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:37:35.191987][info][12848][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 15:37:37.199901][info][12848][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 15:37:37.199959][info][12848][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:37:37.209793][warning][12848][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-12.0, Return Code: -6]
+[03/19 15:45:18.978392][error][13851][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:45:18.978514][error][13851][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:45:18.983270][error][13851][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:45:18.983308][error][13851][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 15:45:18.983797][error][13851][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 15:45:18.983949][error][13851][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 15:45:18.985064][info][13851][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 15:45:18.985168][info][13851][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 15:45:18.985194][info][13851][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:45:18.985212][info][13851][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 15:45:20.992573][info][13851][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 15:45:20.992633][info][13851][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 15:45:21.039738][error][13851][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/19 15:45:21.141462][error][13851][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/19 15:45:21.241718][warning][13851][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/19 15:45:21.309353][info][13851][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/19 15:45:21.309394][info][13851][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/19 18:45:57.452004][error][7218][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 18:45:57.453274][error][7218][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 18:45:57.458347][error][7218][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 18:45:57.458412][error][7218][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 18:45:57.459070][error][7218][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 18:45:57.459114][error][7218][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 18:45:57.459372][info][7218][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 18:45:57.459412][info][7218][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 18:45:57.459429][info][7218][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 18:45:57.459445][info][7218][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 18:45:59.468673][info][7218][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 18:45:59.468743][info][7218][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 18:45:59.478094][warning][7218][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-5.0, Return Code: -6]
+[03/19 18:55:10.720959][error][7374][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 18:55:10.721093][error][7374][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 18:55:10.726449][error][7374][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 18:55:10.726553][error][7374][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 18:55:10.727331][error][7374][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 18:55:10.727379][error][7374][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 18:55:10.727673][info][7374][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 18:55:10.727719][info][7374][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 18:55:10.727735][info][7374][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 18:55:10.727751][info][7374][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 18:55:12.735956][info][7374][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 18:55:12.736025][info][7374][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 18:55:12.745299][warning][7374][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-5.0, Return Code: -6]
+[03/19 19:01:28.795857][error][7511][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 19:01:28.795957][error][7511][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 19:01:28.804853][error][7511][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 19:01:28.804927][error][7511][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/19 19:01:28.805665][error][7511][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/19 19:01:28.805715][error][7511][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/19 19:01:28.805985][info][7511][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/19 19:01:28.806027][info][7511][DeviceManager.cpp:25] Current found device(s): (1)
+[03/19 19:01:28.806044][info][7511][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 19:01:28.806060][info][7511][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/19 19:01:30.814360][info][7511][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/19 19:01:30.814503][info][7511][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/19 19:01:30.825347][warning][7511][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-5.0, Return Code: -6]
+[03/20 11:07:27.729160][error][11070][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:07:27.731313][error][11070][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 11:07:27.736394][error][11070][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:07:27.736476][error][11070][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 11:07:27.737498][error][11070][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:07:27.737568][error][11070][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 11:07:27.737981][info][11070][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 11:07:27.738026][info][11070][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 11:07:27.738046][info][11070][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 11:07:27.738063][info][11070][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 11:07:29.745345][info][11070][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 11:07:29.745404][info][11070][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 11:07:29.755538][error][11070][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 11:07:29.857191][error][11070][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 11:07:29.957431][warning][11070][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 11:07:30.027455][info][11070][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 11:07:30.027517][info][11070][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/20 11:25:00.053516][error][11702][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:25:00.053631][error][11702][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 11:25:00.058550][error][11702][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:25:00.058614][error][11702][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 11:25:00.059199][error][11702][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:25:00.059252][error][11702][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 11:25:00.059527][info][11702][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 11:25:00.059575][info][11702][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 11:25:00.059593][info][11702][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 11:25:00.059609][info][11702][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 11:25:02.069298][info][11702][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 11:25:02.069366][info][11702][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 11:25:02.079832][error][11702][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 11:25:02.181411][error][11702][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 11:25:02.281615][warning][11702][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 11:25:02.348877][info][11702][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 11:25:02.348921][info][11702][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/20 11:50:20.225320][error][12179][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:50:20.225447][error][12179][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 11:50:20.230525][error][12179][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:50:20.230580][error][12179][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 11:50:20.231315][error][12179][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 11:50:20.231351][error][12179][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 11:50:20.231700][info][12179][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 11:50:20.231749][info][12179][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 11:50:20.231768][info][12179][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 11:50:20.231786][info][12179][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 11:50:22.240152][info][12179][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 11:50:22.240219][info][12179][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 11:50:22.250670][error][12179][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 11:50:22.352324][error][12179][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 11:50:22.452528][warning][12179][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 11:50:22.521549][info][12179][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 11:50:22.521593][info][12179][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/20 12:14:19.701240][error][12593][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 12:14:19.701342][error][12593][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 12:14:19.706341][error][12593][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 12:14:19.706396][error][12593][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 12:14:19.707181][error][12593][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 12:14:19.707219][error][12593][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 12:14:19.707548][info][12593][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 12:14:19.707591][info][12593][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 12:14:19.707609][info][12593][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 12:14:19.707626][info][12593][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 12:14:21.715409][info][12593][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 12:14:21.715475][info][12593][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 12:14:21.725997][error][12593][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 12:14:21.827617][error][12593][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 12:14:21.927847][warning][12593][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 12:14:21.995695][info][12593][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 12:14:21.995737][info][12593][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/20 12:34:36.009395][error][12970][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 12:34:36.009498][error][12970][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 12:34:36.014404][error][12970][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 12:34:36.014444][error][12970][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 12:34:36.014951][error][12970][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 12:34:36.014984][error][12970][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 12:34:36.015260][info][12970][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 12:34:36.015304][info][12970][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 12:34:36.015324][info][12970][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 12:34:36.015342][info][12970][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 12:34:38.023430][info][12970][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 12:34:38.023490][info][12970][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 12:34:38.033843][error][12970][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 12:34:38.135443][error][12970][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 12:34:38.235670][warning][12970][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 12:34:38.303031][info][12970][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 12:34:38.303070][info][12970][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/20 13:47:51.793124][error][13825][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 13:47:51.793219][error][13825][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 13:47:51.798363][error][13825][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 13:47:51.798430][error][13825][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 13:47:51.799559][error][13825][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 13:47:51.799611][error][13825][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 13:47:51.799872][info][13825][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 13:47:51.799961][info][13825][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 13:47:51.799987][info][13825][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 13:47:51.800005][info][13825][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 13:47:53.808137][info][13825][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 13:47:53.808199][info][13825][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 13:47:53.832283][warning][13825][ObLibuvcDevicePort.cpp:71] uvc_open failed: [Path: 1-2.2.1-5.0, Return Code: -6]
+[03/20 13:58:54.133354][error][13920][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 13:58:54.133450][error][13920][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 13:58:54.138475][error][13920][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 13:58:54.138523][error][13920][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 13:58:54.139526][error][13920][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 13:58:54.139579][error][13920][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 13:58:54.139896][info][13920][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 13:58:54.139995][info][13920][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 13:58:54.140018][info][13920][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 13:58:54.140037][info][13920][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 13:58:56.148172][info][13920][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 13:58:56.148231][info][13920][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 13:58:56.158727][error][13920][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 13:58:56.260296][error][13920][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 13:58:56.360476][warning][13920][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 13:58:56.432034][info][13920][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 13:58:56.432079][info][13920][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done
+[03/20 14:32:02.017311][error][15065][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 14:32:02.017435][error][15065][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 14:32:02.022341][error][15065][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 14:32:02.022379][error][15065][UsbEnumeratorLibusb.cpp:420] Failed to query USB device serial number
+[03/20 14:32:02.022917][error][15065][UsbEnumeratorLibusb.cpp:159] Invalid descriptor index: 0
+[03/20 14:32:02.022943][error][15065][UsbEnumeratorLibusb.cpp:436] Failed to query USB device interface name. SN: 
+[03/20 14:32:02.023547][info][15065][LinuxUsbPal.cpp:335] Create PollingDeviceWatcher!
+[03/20 14:32:02.023598][info][15065][DeviceManager.cpp:25] Current found device(s): (1)
+[03/20 14:32:02.023619][info][15065][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 14:32:02.023637][info][15065][DeviceManager.cpp:339] Enable net device enumeration: true
+[03/20 14:32:04.031495][info][15065][DeviceManager.cpp:25] Current device(s) list: (1)
+[03/20 14:32:04.032187][info][15065][DeviceManager.cpp:34] 	- Name: Bootloader device, PID: 0x0501, SN/ID: , Connection: USB2.0
+[03/20 14:32:04.042545][error][15065][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 14:32:04.144207][error][15065][ObLibuvcDevicePort.cpp:282] setXu failed, error code=-9
+[03/20 14:32:04.244432][warning][15065][ObException.hpp:48] Request failed, statusCode: 5, msg: Device response with bad magic , magic=0x0, expectOpCode=0x4252
+[03/20 14:32:04.311651][info][15065][ObLibuvcDevicePort.cpp:87] uvc_close done.
+[03/20 14:32:04.311695][info][15065][ObLibuvcDevicePort.cpp:88] ~ObLibuvcDevicePort done

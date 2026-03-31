@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "camera-position-control"
 version = "0.1.0"
 description = "嵌入式相机位置控制与自动拍摄系统 - Jetson Nano 端（仅支持 TensorRT）"
-readme = "README.md"
+readme = {text = "Camera position control system for Jetson Nano.", content-type = "text/plain"}
 requires-python = ">=3.6,<3.7"
 license = {text = "MIT"}
 
@@ -19,9 +19,11 @@ dependencies = [
     "flask>=2.0.0",
     "flask-socketio>=5.1.0",
     "flask-cors>=3.0.10",
+    "PyJWT>=2.4.0",
     "numpy>=1.19.0,<1.24.0",
     "opencv-python>=4.5.0",
     "pyyaml>=5.4.0",
+    "pydantic>=1.8.0,<2.0.0",
     "psutil>=5.7.0",
     "requests>=2.25.0",
 ]
@@ -39,7 +41,3 @@ inference = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]

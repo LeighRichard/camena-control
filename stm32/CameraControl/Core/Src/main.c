@@ -200,7 +200,8 @@ void SystemClock_Config(void)
  */
 static void process_command(const Command* cmd)
 {
-  Response rsp;
+  Response rsp = {0};
+  rsp.seq = cmd->seq;
   rsp.status = STATUS_OK;
   
   /* 喂狗 */

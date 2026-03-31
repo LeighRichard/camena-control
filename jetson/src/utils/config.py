@@ -124,7 +124,7 @@ class VisualServoConfig:
     center_tolerance: int = 30
     max_pan_speed: float = 30.0
     max_tilt_speed: float = 20.0
-    max_rail_speed: float = 50.0
+    max_rail_speed: float = 6.0
     prediction_enabled: bool = True
 
 

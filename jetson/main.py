@@ -57,8 +57,10 @@ class CameraControlSystem:
             # 将配置对象转换为字典
             config_dict = {
                 'camera': self.config.camera.__dict__ if hasattr(self.config, 'camera') else {},
-                'serial': self.config.serial.__dict__ if hasattr(self.config, 'serial') else {},
+                'comm': self.config.comm.__dict__ if hasattr(self.config, 'comm') else {},
                 'detection': self.config.detection.__dict__ if hasattr(self.config, 'detection') else {},
+                'visual_servo': self.config.visual_servo.__dict__ if hasattr(self.config, 'visual_servo') else {},
+                'face_recognition': self.config.face_recognition.__dict__ if hasattr(self.config, 'face_recognition') else {},
                 'web': self.config.web.__dict__ if hasattr(self.config, 'web') else {},
             }
             warnings = ConfigValidator.validate_all(config_dict)

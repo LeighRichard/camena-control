@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file protocol.c
  * @brief 通信协议实现 v2.0（带序列号）
  */
@@ -73,6 +73,10 @@ ParseResult cmd_parse(const uint8_t* buffer, size_t len, Command* out)
     /* 解析序列号和长度字段 */
     uint8_t seq = buffer[1];
     uint8_t data_len = buffer[2];
+    if (data_len < 1 || data_len > (FRAME_MAX_DATA_LEN + 1))
+    {
+        return PARSE_ERROR_LENGTH;
+    }
     size_t expected_len = 1 + 1 + 1 + data_len + 2 + 1;  /* HEAD + SEQ + LEN + DATA + CRC + TAIL */
     
     /* 检查是否收到完整帧 */
@@ -89,7 +93,7 @@ ParseResult cmd_parse(const uint8_t* buffer, size_t len, Command* out)
     
     /* 提取并验证校验和 (SEQ + LEN + CMD + DATA) */
     uint16_t crc_received = buffer[expected_len - 3] | (buffer[expected_len - 2] << 8);
-    if (!crc16_verify(&buffer[1], 1 + data_len, crc_received))
+    if (!crc16_verify(&buffer[1], 2 + data_len, crc_received))
     {
         return PARSE_ERROR_CHECKSUM;
     }
@@ -99,6 +103,7 @@ ParseResult cmd_parse(const uint8_t* buffer, size_t len, Command* out)
     
     /* 解析指令类型 */
     out->type = (CommandType)buffer[3];
+    uint8_t payload_len = data_len - 1; /* 去掉 CMD 后的真实 DATA 长度 */
     
     /* 根据指令类型解析数据 */
     const uint8_t* cmd_data = &buffer[4];
@@ -107,32 +112,60 @@ ParseResult cmd_parse(const uint8_t* buffer, size_t len, Command* out)
     {
         case CMD_POSITION:
         case CMD_MOVE_ABSOLUTE:
+            if (payload_len != 5)
+            {
+                return PARSE_ERROR_LENGTH;
+            }
             out->axis = cmd_data[0];
             out->value = (int32_t)(cmd_data[1] | (cmd_data[2] << 8) | 
                                    (cmd_data[3] << 16) | (cmd_data[4] << 24));
             break;
             
         case CMD_SET_VELOCITY:
+            if (payload_len != 5)
+            {
+                return PARSE_ERROR_LENGTH;
+            }
             out->axis = cmd_data[0];
             out->value = (int32_t)(cmd_data[1] | (cmd_data[2] << 8) | 
                                    (cmd_data[3] << 16) | (cmd_data[4] << 24));
             break;
             
         case CMD_CONFIG:
+            if (payload_len != 5)
+            {
+                return PARSE_ERROR_LENGTH;
+            }
             out->axis = cmd_data[0];
             out->value = (int32_t)(cmd_data[1] | (cmd_data[2] << 8) | 
                                    (cmd_data[3] << 16) | (cmd_data[4] << 24));
             break;
             
         case CMD_HOME:
+            if (payload_len != 1)
+            {
+                return PARSE_ERROR_LENGTH;
+            }
             out->axis = cmd_data[0];
             out->value = 0;
             break;
             
         case CMD_STATUS:
         case CMD_ESTOP:
-        case CMD_STOP:
+            if (payload_len != 0)
+            {
+                return PARSE_ERROR_LENGTH;
+            }
             out->axis = AXIS_ALL;
+            out->value = 0;
+            break;
+
+        case CMD_STOP:
+            if (payload_len > 1)
+            {
+                return PARSE_ERROR_LENGTH;
+            }
+            out->axis = (payload_len == 1) ? cmd_data[0] : AXIS_ALL;
             out->value = 0;
             break;
             
@@ -191,10 +224,11 @@ size_t cmd_encode(const Response* rsp, uint8_t* buffer)
     buffer[3] = rsp->type;
     
     /* 计算校验和 (SEQ + LEN + TYPE + DATA) */
-    uint16_t crc = crc16_calculate(&buffer[1], 1 + data_len);
+    /* CRC 覆盖 SEQ(1)+LEN(1)+TYPE+DATA = 2+data_len 字节，与 cmd_parse 保持一致 */
+    uint16_t crc = crc16_calculate(&buffer[1], 2 + data_len);
     
     /* 添加校验和 (小端序) */
-    size_t crc_pos = 2 + data_len;
+    size_t crc_pos = 3 + data_len;
     buffer[crc_pos] = crc & 0xFF;
     buffer[crc_pos + 1] = (crc >> 8) & 0xFF;
     
