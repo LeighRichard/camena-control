@@ -1,6 +1,6 @@
 /**
  * @file safety.h
- * @brief 安全监控模块
+ * @brief Safety monitoring module
  */
 
 #ifndef __SAFETY_H
@@ -9,7 +9,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* 安全状态 */
+/*
+ * Hardware safety input switches.
+ * Set to 1 when the corresponding external wiring is installed.
+ */
+#ifndef SAFETY_ENABLE_ESTOP_INPUT
+#define SAFETY_ENABLE_ESTOP_INPUT         0
+#endif
+
+#ifndef SAFETY_ENABLE_LIMIT_SWITCH_INPUTS
+#define SAFETY_ENABLE_LIMIT_SWITCH_INPUTS 0
+#endif
+
 typedef enum {
     SAFETY_OK,
     SAFETY_LIMIT_HIT,
@@ -19,7 +30,6 @@ typedef enum {
     SAFETY_ESTOP,
 } SafetyStatus;
 
-/* 限位开关状态 */
 typedef struct {
     bool pan_pos;
     bool pan_neg;
@@ -29,7 +39,6 @@ typedef struct {
     bool rail_neg;
 } LimitSwitchState;
 
-/* 函数声明 */
 void safety_init(void);
 SafetyStatus safety_check(void);
 void safety_emergency_stop(void);
@@ -37,7 +46,6 @@ void safety_reset(void);
 LimitSwitchState safety_get_limit_state(void);
 bool safety_is_estop_pressed(void);
 
-/* 通信看门狗 */
 void safety_watchdog_feed(void);
 void safety_watchdog_check(void);
 void safety_set_watchdog_timeout(uint32_t timeout_ms);
