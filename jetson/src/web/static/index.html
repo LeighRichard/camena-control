@@ -252,6 +252,23 @@
             font-size: 0.9rem;
             color: #aaa;
         }
+
+        .detector-status {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.04);
+            font-size: 0.9rem;
+            color: #ddd;
+        }
+
+        .detector-meta {
+            margin-top: 4px;
+            color: #999;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            word-break: break-all;
+        }
         
         .face-register {
             display: flex;
@@ -354,6 +371,126 @@
             max-height: 120px;
             overflow-y: auto;
         }
+
+        .trace-toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .trace-toolbar button,
+        .trace-toolbar select {
+            flex: 1;
+        }
+
+        .trace-filter {
+            padding: 8px 10px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 0.85rem;
+        }
+
+        .trace-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: #9aa4bf;
+            margin-bottom: 10px;
+        }
+
+        .trace-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .trace-empty {
+            color: #7f89a6;
+            font-size: 0.82rem;
+            padding: 10px 8px;
+            background: #0f3460;
+            border-radius: 6px;
+        }
+
+        .trace-item {
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 10px;
+            border-left: 3px solid #355c8a;
+        }
+
+        .trace-item.tx {
+            border-left-color: #60a5fa;
+        }
+
+        .trace-item.rx,
+        .trace-item.rx-async,
+        .trace-item.rx-unmatched {
+            border-left-color: #4ade80;
+        }
+
+        .trace-item.rx-invalid {
+            border-left-color: #f87171;
+        }
+
+        .trace-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .trace-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .trace-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            color: #dbeafe;
+            text-transform: uppercase;
+        }
+
+        .trace-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #eef2ff;
+        }
+
+        .trace-time {
+            font-size: 0.72rem;
+            color: #9aa4bf;
+            white-space: nowrap;
+        }
+
+        .trace-details {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.74rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .trace-frame {
+            margin-top: 6px;
+            font-family: 'SF Mono', monospace;
+            font-size: 0.72rem;
+            color: #94a3b8;
+            word-break: break-all;
+        }
         
         .log-entry {
             padding: 2px 0;
@@ -430,6 +567,10 @@
                         <button id="modeManual" onclick="setMode('manual')">手动</button>
                         <button id="modeFace" onclick="setMode('face')">人脸</button>
                     </div>
+                    <div class="detector-status">
+                        <div id="detectorStatus">检测器未初始化</div>
+                        <div class="detector-meta" id="detectorMeta">模型: --</div>
+                    </div>
                     <div class="target-list" id="targetList">
                         <div class="target-item">
                             <span style="color: #888">暂无检测目标</span>
@@ -467,6 +608,29 @@
                             <div class="progress-fill" id="captureProgress" style="width: 0%"></div>
                         </div>
                         <div class="progress-text" id="captureStatus">就绪</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-title">串口诊断</div>
+                    <div class="trace-toolbar">
+                        <select id="commTraceSource" class="trace-filter" onchange="setCommTraceSource(this.value)">
+                            <option value="">全部来源</option>
+                            <option value="TX">TX</option>
+                            <option value="RX">RX</option>
+                            <option value="RX-ASYNC">RX-ASYNC</option>
+                            <option value="RX-UNMATCHED">RX-UNMATCHED</option>
+                            <option value="RX-INVALID">RX-INVALID</option>
+                        </select>
+                        <button onclick="refreshCommDiagnostics()">刷新</button>
+                        <button onclick="clearCommDiagnostics()" class="danger">清空</button>
+                    </div>
+                    <div class="trace-meta">
+                        <span id="commTraceMeta">诊断信息加载中...</span>
+                        <span id="commTraceCount">0 / 0</span>
+                    </div>
+                    <div class="trace-list" id="commTraceList">
+                        <div class="trace-empty">暂无串口诊断记录</div>
                     </div>
                 </div>
                 

@@ -163,6 +163,7 @@ class ObjectDetector:
         self._class_names = self.COCO_CLASSES.copy()
         self._is_loaded = False
         self._simulation_mode = False
+        self._last_load_error = None
     
     def load_model(self, model_path: str = None) -> Tuple[bool, str]:
         """
@@ -176,6 +177,15 @@ class ObjectDetector:
         """
         if model_path:
             self._config.model_path = model_path
+
+        self._model = None
+        self._context = None
+        self._stream = None
+        self._bindings = None
+        self._inference_engine = None
+        self._is_loaded = False
+        self._simulation_mode = False
+        self._last_load_error = None
         
         if not self._config.model_path:
             # 启用模拟模式
@@ -763,6 +773,39 @@ class ObjectDetector:
     def get_inference_engine(self) -> Optional[str]:
         """获取当前使用的推理引擎"""
         return self._inference_engine
+
+    def get_runtime_status(self) -> Dict[str, Any]:
+        """获取当前检测器运行状态，供 Web 和日志复用。"""
+        model_path = self._config.model_path
+        model_exists = bool(model_path) and os.path.exists(model_path)
+        inference_engine = self._inference_engine
+        last_error = self._last_load_error
+
+        if self._simulation_mode:
+            inference_engine = "simulation"
+        elif not self._is_loaded:
+            if not model_path:
+                last_error = last_error or "未配置检测模型"
+            elif not model_exists:
+                last_error = last_error or f"模型文件不存在: {model_path}"
+            else:
+                ext = os.path.splitext(model_path)[1].lower()
+                if ext not in [".engine", ".trt"]:
+                    last_error = last_error or (
+                        f"不支持的模型文件格式: {ext}，仅支持 .engine 或 .trt"
+                    )
+                elif not TENSORRT_AVAILABLE:
+                    last_error = last_error or "TensorRT 不可用"
+
+        return {
+            "loaded": self._is_loaded,
+            "simulation_mode": self._simulation_mode,
+            "inference_engine": inference_engine,
+            "tensorrt_available": TENSORRT_AVAILABLE,
+            "model_path": model_path,
+            "model_exists": model_exists,
+            "last_error": last_error,
+        }
     
     @staticmethod
     def convert_onnx_to_tensorrt(

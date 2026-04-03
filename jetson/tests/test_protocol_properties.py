@@ -15,10 +15,12 @@ sys.path.insert(0, 'src')
 
 from comm.protocol import (
     Command, Response, CommandType, ResponseType,
-    AxisType, StatusCode,
+    AxisType, StatusCode, ConfigParamId,
     encode_command, decode_command,
     encode_response, decode_response,
-    crc16_calculate, crc16_verify
+    crc16_calculate, crc16_verify,
+    config_pack_value, config_param_from_value,
+    config_raw_value, config_signed_value
 )
 
 
@@ -115,6 +117,21 @@ def test_response_roundtrip(rsp: Response):
 
 
 # ==================== Property 2: 校验和完整性 ====================
+
+def test_config_pack_helpers_signed_roundtrip():
+    packed = config_pack_value(ConfigParamId.PAN_MIN_LIMIT, -1234)
+
+    assert config_param_from_value(packed) == ConfigParamId.PAN_MIN_LIMIT
+    assert config_raw_value(packed) == (0x10000 - 1234)
+    assert config_signed_value(packed) == -1234
+
+
+def test_config_pack_helpers_unsigned_roundtrip():
+    packed = config_pack_value(ConfigParamId.RAIL_MAX_LIMIT, 50000)
+
+    assert config_param_from_value(packed) == ConfigParamId.RAIL_MAX_LIMIT
+    assert config_raw_value(packed) == 50000
+
 
 @given(data=st.binary(min_size=1, max_size=64))
 @settings(max_examples=100)

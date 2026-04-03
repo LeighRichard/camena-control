@@ -1,6 +1,6 @@
 /**
  * @file uart_comm.h
- * @brief UART 通信模块头文件
+ * @brief UART communication helpers for the Jetson <-> STM32 link
  */
 
 #ifndef __UART_COMM_H
@@ -13,28 +13,19 @@ extern "C" {
 #include "main.h"
 #include "protocol.h"
 
-/* 缓冲区大小 */
+/* Ring-buffer sizes for the serial RX/TX path. */
 #define UART_RX_BUFFER_SIZE     256
 #define UART_TX_BUFFER_SIZE     256
 
-/* 回调函数类型 */
 typedef void (*CommandCallback)(const Command* cmd);
 
-/**
- * @brief 初始化 UART 模块
- */
+/* Start interrupt-driven reception and reset parser state. */
 void uart_comm_init(void);
 
-/**
- * @brief 处理接收到的数据
- * @param callback 指令处理回调函数
- */
+/* Drain the RX ring buffer, parse complete frames, and invoke callback. */
 void uart_comm_process(CommandCallback callback);
 
-/**
- * @brief 发送响应
- * @param rsp 响应结构指针
- */
+/* Encode a response frame and send it by DMA, queueing when TX is busy. */
 void uart_comm_send_response(const Response* rsp);
 
 #ifdef __cplusplus

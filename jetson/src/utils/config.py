@@ -95,6 +95,9 @@ class CommConfig:
     port: str = "/dev/ttyUSB0"
     baudrate: int = 115200
     timeout: float = 1.0
+    trace_protocol: bool = False
+    trace_frames_hex: bool = False
+    trace_history_size: int = 200
 
 
 @dataclass
@@ -342,6 +345,12 @@ def _apply_env_overrides(config: SystemConfig) -> SystemConfig:
         config.comm.port = os.getenv('COMM_PORT')
     if os.getenv('COMM_BAUDRATE'):
         config.comm.baudrate = int(os.getenv('COMM_BAUDRATE'))
+    if os.getenv('COMM_TRACE_PROTOCOL'):
+        config.comm.trace_protocol = os.getenv('COMM_TRACE_PROTOCOL').lower() == 'true'
+    if os.getenv('COMM_TRACE_FRAMES_HEX'):
+        config.comm.trace_frames_hex = os.getenv('COMM_TRACE_FRAMES_HEX').lower() == 'true'
+    if os.getenv('COMM_TRACE_HISTORY_SIZE'):
+        config.comm.trace_history_size = int(os.getenv('COMM_TRACE_HISTORY_SIZE'))
     
     # Web
     if os.getenv('WEB_PORT'):

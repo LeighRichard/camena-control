@@ -91,6 +91,9 @@ if PYDANTIC_AVAILABLE:
         port: str = "/dev/ttyUSB0"
         baudrate: int = Field(default=115200, ge=9600, le=4000000)
         timeout: float = Field(default=1.0, ge=0.1, le=30.0)
+        trace_protocol: bool = False
+        trace_frames_hex: bool = False
+        trace_history_size: int = Field(default=200, ge=10, le=5000)
         
         @field_validator('baudrate')
         def validate_baudrate(cls, v):
@@ -216,6 +219,9 @@ else:
         port: str = "/dev/ttyUSB0"
         baudrate: int = 115200
         timeout: float = 1.0
+        trace_protocol: bool = False
+        trace_frames_hex: bool = False
+        trace_history_size: int = 200
     
     @dataclass
     class DetectionConfigModel:

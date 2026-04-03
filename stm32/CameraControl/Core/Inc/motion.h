@@ -1,41 +1,38 @@
 /**
  * @file motion.h
- * @brief 运动控制模块
+ * @brief Motion control interface for the STM32 motor controller
  */
 
 #ifndef __MOTION_H
 #define __MOTION_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-/* 位置结构 (0.01度/0.01mm 为单位) */
+/* Position uses 0.01 degree for pan/tilt and 0.01 mm for rail. */
 typedef struct {
-    int32_t pan_angle;      /* 水平角度 */
-    int32_t tilt_angle;     /* 俯仰角度 */
-    int32_t rail_pos;       /* 滑轨位置 */
+    int32_t pan_angle;
+    int32_t tilt_angle;
+    int32_t rail_pos;
 } Position;
 
-/* PID 参数 */
 typedef struct {
-    float kp;               /* 比例系数 */
-    float ki;               /* 积分系数 */
-    float kd;               /* 微分系数 */
-    float integral;         /* 积分累积 */
-    float prev_error;       /* 上次误差 */
-    float output_min;       /* 输出下限 */
-    float output_max;       /* 输出上限 */
-    float integral_max;     /* 积分限幅 */
+    float kp;
+    float ki;
+    float kd;
+    float integral;
+    float prev_error;
+    float output_min;
+    float output_max;
+    float integral_max;
 } PIDController;
 
-/* 运动配置 */
 typedef struct {
-    float max_velocity;     /* 最大速度 */
-    float max_accel;        /* 最大加速度 */
-    float jerk;             /* 加加速度 (S曲线) */
+    float max_velocity;
+    float max_accel;
+    float jerk;
 } MotionProfile;
 
-/* 限位范围 */
 typedef struct {
     int32_t pan_min;
     int32_t pan_max;
@@ -45,17 +42,16 @@ typedef struct {
     int32_t rail_max;
 } PositionLimits;
 
-/* 函数声明 - PID 控制 */
 void pid_init(PIDController* pid, float kp, float ki, float kd);
 void pid_reset(PIDController* pid);
 float pid_compute(PIDController* pid, float setpoint, float current, float dt);
 void pid_set_limits(PIDController* pid, float output_min, float output_max, float integral_max);
 
-/* 函数声明 - 运动控制 */
 void motion_init(void);
 void motion_move_to_position(const Position* target);
 void motion_move_to(uint8_t axis, int32_t value);
 void motion_stop(void);
+void motion_stop_axis(uint8_t axis);
 Position motion_get_current(void);
 int32_t motion_get_position(uint8_t axis);
 bool motion_is_complete(void);
@@ -66,10 +62,8 @@ bool motion_check_limits(const Position* pos);
 void motion_home(uint8_t axis);
 void motion_update(void);
 
-/* 函数声明 - S曲线规划 */
 void motion_plan_s_curve(const Position* start, const Position* end, const MotionProfile* profile);
 
-/* 函数声明 - 动态参数配置 (用于配置指令) */
 void motion_set_max_velocity(float velocity);
 void motion_set_max_accel(float accel);
 void motion_set_pid_p(uint8_t axis, float p);
@@ -80,8 +74,6 @@ void motion_set_limit_max(uint8_t axis, int32_t value);
 void motion_set_velocity(uint8_t axis, float velocity);
 void motion_stop_all(void);
 
-/* 轴定义 - 使用宏，避免与 protocol.h 枚举冲突 */
-/* 这些宏与 protocol.h 中的 AxisType 枚举值相同 */
 #ifndef AXIS_PAN
 #define AXIS_PAN    0x00
 #define AXIS_TILT   0x01

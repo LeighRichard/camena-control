@@ -66,3 +66,53 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Add user defined libraries
 )
+
+set(FIRMWARE_ELF "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.elf")
+set(FIRMWARE_HEX "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex")
+set(FIRMWARE_BIN "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin")
+
+# Keep the link rule free of nested POST_BUILD cmd.exe wrappers. Generating
+# HEX/BIN as a separate build step is much more stable on Windows when the
+# project path contains spaces.
+add_custom_command(
+    OUTPUT "${FIRMWARE_HEX}" "${FIRMWARE_BIN}"
+    COMMAND "${CMAKE_OBJCOPY}" -O ihex "${FIRMWARE_ELF}" "${FIRMWARE_HEX}"
+    COMMAND "${CMAKE_OBJCOPY}" -O binary "${FIRMWARE_ELF}" "${FIRMWARE_BIN}"
+    COMMAND "${CMAKE_SIZE}" "${FIRMWARE_ELF}"
+    DEPENDS ${CMAKE_PROJECT_NAME}
+    COMMENT "Generating HEX/BIN firmware artifacts"
+    VERBATIM
+)
+
+add_custom_target(firmware_artifacts ALL
+    DEPENDS "${FIRMWARE_HEX}" "${FIRMWARE_BIN}"
+)
+
+find_program(STM32_PROGRAMMER_CLI
+    NAMES STM32_Programmer_CLI STM32_Programmer_CLI.exe
+    HINTS
+        "D:/STM32CubeCLT_1.20.0/STM32CubeProgrammer/bin"
+        "D:/STM32CubeCLT_1.20.0/programmer/2.22.0+st.1/bin"
+        "D:/STM32CubeCLT_1.20.0/programmer/2.21.0/bin"
+        "D:/STM32CubeCLT_1.20.0/programmer/2.20.0/bin"
+)
+
+if(STM32_PROGRAMMER_CLI)
+    add_custom_target(erase
+        COMMAND "${STM32_PROGRAMMER_CLI}" -c port=SWD mode=UR reset=HWrst -e all
+        COMMENT "Erasing target via STM32CubeProgrammer"
+        USES_TERMINAL
+        VERBATIM
+    )
+
+    add_custom_target(flash
+        COMMAND "${STM32_PROGRAMMER_CLI}" -c port=SWD mode=UR reset=HWrst
+                -w "${FIRMWARE_BIN}" 0x08000000 -v -rst
+        DEPENDS firmware_artifacts
+        COMMENT "Flashing ${CMAKE_PROJECT_NAME}.bin via STM32CubeProgrammer"
+        USES_TERMINAL
+        VERBATIM
+    )
+else()
+    message(WARNING "STM32_Programmer_CLI not found. 'flash' and 'erase' targets are unavailable.")
+endif()

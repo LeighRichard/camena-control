@@ -252,6 +252,156 @@ def create_app(config: Optional[WebConfig] = None):
     app.video_quality = config.video_quality
     app.latest_frame = None
     app.frame_lock = threading.Lock()
+
+    def _get_detector_runtime_status():
+        detector = app.object_detector
+        if not detector:
+            return {
+                "enabled": False,
+                "loaded": False,
+                "simulation_mode": False,
+                "inference_engine": None,
+                "tensorrt_available": False,
+                "model_path": None,
+                "model_exists": False,
+                "last_error": "检测器未初始化",
+            }
+
+        if hasattr(detector, "get_runtime_status"):
+            status = detector.get_runtime_status()
+        else:
+            config_data = detector.get_config().to_dict() if hasattr(detector, "get_config") else {}
+            status = {
+                "loaded": detector.is_loaded() if hasattr(detector, "is_loaded") else True,
+                "simulation_mode": (
+                    detector.is_simulation_mode()
+                    if hasattr(detector, "is_simulation_mode")
+                    else False
+                ),
+                "inference_engine": (
+                    detector.get_inference_engine()
+                    if hasattr(detector, "get_inference_engine")
+                    else None
+                ),
+                "tensorrt_available": None,
+                "model_path": config_data.get("model_path"),
+                "model_exists": None,
+                "last_error": None,
+            }
+
+        return {"enabled": True, **status}
+
+    def _normalize_comm_result(result, wait_response: bool):
+        """兼容旧版和新版 send_command 返回格式。"""
+        if isinstance(result, tuple) and len(result) == 2:
+            first, second = result
+            if isinstance(first, bool):
+                if first:
+                    return True, second, ""
+                return False, None, str(second)
+
+            response, error = first, second
+            success = response is not None or (not wait_response and error == "")
+            return success, response, error
+
+        if isinstance(result, bool):
+            return result, None, "" if result else "命令发送失败"
+
+        if result is None:
+            return (not wait_response), None, "" if not wait_response else "命令发送失败"
+
+        return True, result, ""
+
+    def _send_comm_command(cmd, wait_response: bool = True):
+        """统一调用通信层，并兼容旧版 mock 的方法签名。"""
+        if not app.comm_manager:
+            return False, None, "通信管理器未初始化"
+
+        try:
+            try:
+                result = app.comm_manager.send_command(cmd, wait_response=wait_response)
+            except TypeError:
+                result = app.comm_manager.send_command(cmd)
+        except Exception as e:
+            return False, None, str(e)
+
+        return _normalize_comm_result(result, wait_response)
+
+    def _parse_axis(axis_value, default="all"):
+        from comm.protocol import AxisType
+
+        if axis_value is None:
+            axis_value = default
+
+        if isinstance(axis_value, AxisType):
+            return axis_value
+
+        if isinstance(axis_value, int):
+            return AxisType(axis_value)
+
+        key = str(axis_value).strip().lower()
+        mapping = {
+            "pan": AxisType.PAN,
+            "tilt": AxisType.TILT,
+            "rail": AxisType.RAIL,
+            "all": AxisType.ALL,
+        }
+        if key not in mapping:
+            raise ValueError(f"不支持的轴名称: {axis_value}")
+        return mapping[key]
+
+    def _axis_name(axis):
+        mapping = {
+            0: "pan",
+            1: "tilt",
+            2: "rail",
+            255: "all",
+        }
+        return mapping.get(int(axis), str(axis))
+
+    def _parse_config_param(param_name):
+        from comm.protocol import ConfigParamId
+
+        key = str(param_name).strip().lower()
+        mapping = {
+            "max_velocity": ConfigParamId.MAX_VELOCITY,
+            "max_accel": ConfigParamId.MAX_ACCEL,
+            "pid_p": ConfigParamId.PID_P,
+            "pid_i": ConfigParamId.PID_I,
+            "pid_d": ConfigParamId.PID_D,
+            "watchdog_timeout_ms": ConfigParamId.WATCHDOG_TIMEOUT_MS,
+            "watchdog_enable": ConfigParamId.WATCHDOG_ENABLE,
+            "pan_min_limit": ConfigParamId.PAN_MIN_LIMIT,
+            "pan_max_limit": ConfigParamId.PAN_MAX_LIMIT,
+            "tilt_min_limit": ConfigParamId.TILT_MIN_LIMIT,
+            "tilt_max_limit": ConfigParamId.TILT_MAX_LIMIT,
+            "rail_min_limit": ConfigParamId.RAIL_MIN_LIMIT,
+            "rail_max_limit": ConfigParamId.RAIL_MAX_LIMIT,
+        }
+        if key not in mapping:
+            raise ValueError(f"不支持的配置参数: {param_name}")
+        return mapping[key]
+
+    def _pack_limit_value(axis, value: float) -> int:
+        raw_value = int(round(float(value) * 100))
+        if int(axis) == 2:
+            if raw_value < 0 or raw_value > 0xFFFF:
+                raise ValueError("Rail 限位超出 16 位无符号范围")
+            return raw_value
+
+        if raw_value < -0x8000 or raw_value > 0x7FFF:
+            raise ValueError("角度限位超出 16 位有符号范围")
+        return raw_value
+
+    def _send_config(axis, param_id, raw_value):
+        from comm.protocol import Command, CommandType, config_pack_value
+
+        cmd = Command(
+            type=CommandType.CONFIG,
+            axis=axis,
+            value=config_pack_value(param_id, int(raw_value)),
+        )
+        return _send_comm_command(cmd, wait_response=True)
     
     # ==================== 系统状态 API ====================
     
@@ -260,12 +410,17 @@ def create_app(config: Optional[WebConfig] = None):
     def get_status():
         """获取系统状态"""
         if app.state_manager:
-            return jsonify(app.state_manager.get_full_state())
+            state = app.state_manager.get_full_state()
+            state["runtime"] = {
+                "detector": _get_detector_runtime_status(),
+            }
+            return jsonify(state)
         return jsonify({"error": "状态管理器未初始化"}), 500
     
     @app.route("/api/health", methods=["GET"])
     def health_check():
         """健康检查"""
+        detector_status = _get_detector_runtime_status()
         return jsonify({
             "status": "ok",
             "timestamp": time.time(),
@@ -274,7 +429,8 @@ def create_app(config: Optional[WebConfig] = None):
                 "camera": app.camera_controller is not None,
                 "comm": app.comm_manager is not None,
                 "scheduler": app.task_scheduler is not None,
-                "detector": app.object_detector is not None
+                "detector": app.object_detector is not None,
+                "detector_loaded": detector_status.get("loaded", False)
             }
         })
     
@@ -286,6 +442,36 @@ def create_app(config: Optional[WebConfig] = None):
             path_filter = request.args.get('filter', None)
             return jsonify(app.state_manager.get_history(limit, path_filter))
         return jsonify({"error": "状态管理器未初始化"}), 500
+
+    @app.route("/api/comm/diagnostics", methods=["GET"])
+    @require_auth(Permission.CONFIGURE_SYSTEM if app.auth_manager else None)
+    def get_comm_diagnostics():
+        """获取最近的串口通信诊断记录。"""
+        if not app.comm_manager:
+            return jsonify({"error": "通信管理器未初始化"}), 500
+
+        limit = request.args.get("limit", 100, type=int)
+        source = request.args.get("source")
+        if limit is not None and limit < 0:
+            return jsonify({"error": "limit 不能为负数"}), 400
+
+        if hasattr(app.comm_manager, "get_trace_diagnostics"):
+            return jsonify(app.comm_manager.get_trace_diagnostics(limit=limit, source=source))
+
+        return jsonify({"error": "通信管理器不支持诊断接口"}), 501
+
+    @app.route("/api/comm/diagnostics/clear", methods=["POST"])
+    @require_auth(Permission.CONFIGURE_SYSTEM if app.auth_manager else None)
+    def clear_comm_diagnostics():
+        """清空串口通信诊断记录。"""
+        if not app.comm_manager:
+            return jsonify({"error": "通信管理器未初始化"}), 500
+
+        if hasattr(app.comm_manager, "clear_trace_history"):
+            cleared = app.comm_manager.clear_trace_history()
+            return jsonify({"status": "cleared", "cleared": cleared})
+
+        return jsonify({"error": "通信管理器不支持诊断接口"}), 501
     
     # ==================== 运动控制 API ====================
     
@@ -316,7 +502,8 @@ def create_app(config: Optional[WebConfig] = None):
         rail = data.get("rail")
         
         if app.comm_manager:
-            # 发送移动命令
+            # 手动控制接口逐轴发送 POSITION，并等待每条命令的响应，
+            # 这样前端可以立即感知哪一轴下发失败。
             try:
                 from comm.protocol import Command, CommandType, AxisType
                 
@@ -328,7 +515,8 @@ def create_app(config: Optional[WebConfig] = None):
                         axis=AxisType.PAN,
                         value=int(pan * 100)  # 转换为整数（假设单位是0.01度）
                     )
-                    success, response = app.comm_manager.send_command(cmd)
+                    success, response, error = _send_comm_command(cmd, wait_response=True)
+                    response = error if not success else response
                     if not success:
                         return jsonify({"error": f"Pan命令发送失败: {response}"}), 500
                 
@@ -338,7 +526,8 @@ def create_app(config: Optional[WebConfig] = None):
                         axis=AxisType.TILT,
                         value=int(tilt * 100)
                     )
-                    success, response = app.comm_manager.send_command(cmd)
+                    success, response, error = _send_comm_command(cmd, wait_response=True)
+                    response = error if not success else response
                     if not success:
                         return jsonify({"error": f"Tilt命令发送失败: {response}"}), 500
                 
@@ -348,7 +537,8 @@ def create_app(config: Optional[WebConfig] = None):
                         axis=AxisType.RAIL,
                         value=int(rail * 100)  # 转换为整数（0.01mm）
                     )
-                    success, response = app.comm_manager.send_command(cmd)
+                    success, response, error = _send_comm_command(cmd, wait_response=True)
+                    response = error if not success else response
                     if not success:
                         return jsonify({"error": f"Rail命令发送失败: {response}"}), 500
                 
@@ -364,8 +554,9 @@ def create_app(config: Optional[WebConfig] = None):
         if app.comm_manager:
             try:
                 from comm.protocol import Command, CommandType
-                cmd = Command(type=CommandType.ESTOP)
-                success, response = app.comm_manager.send_command(cmd)
+                cmd = Command(type=CommandType.STOP)
+                success, response, error = _send_comm_command(cmd, wait_response=True)
+                response = error if not success else response
                 if success:
                     return jsonify({"status": "stopped"})
                 return jsonify({"error": f"命令发送失败: {response}"}), 500
@@ -381,7 +572,8 @@ def create_app(config: Optional[WebConfig] = None):
             try:
                 from comm.protocol import Command, CommandType, AxisType
                 cmd = Command(type=CommandType.HOME, axis=AxisType.ALL)
-                success, response = app.comm_manager.send_command(cmd)
+                success, response, error = _send_comm_command(cmd, wait_response=True)
+                response = error if not success else response
                 if success:
                     return jsonify({"status": "homing"})
                 return jsonify({"error": f"命令发送失败: {response}"}), 500
@@ -392,6 +584,220 @@ def create_app(config: Optional[WebConfig] = None):
     
     # ==================== 相机控制 API ====================
     
+    @app.route("/api/motion/config", methods=["GET", "POST"])
+    @require_auth(Permission.CONFIGURE_SYSTEM if app.auth_manager else None)
+    def motion_config():
+        """查看或更新 STM32 运动控制 CONFIG 参数。"""
+        if request.method == "GET":
+            return jsonify({
+                "supported_axes": ["pan", "tilt", "rail", "all"],
+                "typed_updates": {
+                    "pid": {
+                        "axis_required": True,
+                        "fields": ["p", "i", "d"],
+                        "encoding": "gain * 100",
+                    },
+                    "limits": {
+                        "axis_required": True,
+                        "fields": ["min", "max"],
+                        "unit": {
+                            "pan": "degree",
+                            "tilt": "degree",
+                            "rail": "mm",
+                        },
+                        "encoding": "0.01 degree / 0.01 mm",
+                    },
+                    "watchdog": {
+                        "axis_required": False,
+                        "fields": ["timeout_ms", "enabled"],
+                    },
+                },
+                "raw_params": [
+                    "max_velocity",
+                    "max_accel",
+                    "pid_p",
+                    "pid_i",
+                    "pid_d",
+                    "watchdog_timeout_ms",
+                    "watchdog_enable",
+                    "pan_min_limit",
+                    "pan_max_limit",
+                    "tilt_min_limit",
+                    "tilt_max_limit",
+                    "rail_min_limit",
+                    "rail_max_limit",
+                ],
+            })
+
+        if not app.comm_manager:
+            return jsonify({"error": "通信管理器未初始化"}), 500
+
+        data = request.get_json() or {}
+        if not data:
+            return jsonify({"error": "缺少配置数据"}), 400
+
+        applied = []
+
+        try:
+            from comm.protocol import AxisType, ConfigParamId
+            from comm.unit_converter import MotionValidator
+
+            axis = _parse_axis(data.get("axis"), default="all")
+
+            pid = data.get("pid") or {}
+            if pid:
+                if axis == AxisType.ALL:
+                    return jsonify({"error": "PID 配置必须指定单个轴"}), 400
+
+                pid_fields = {
+                    "p": ConfigParamId.PID_P,
+                    "i": ConfigParamId.PID_I,
+                    "d": ConfigParamId.PID_D,
+                }
+                for field_name, param_id in pid_fields.items():
+                    if field_name not in pid or pid[field_name] is None:
+                        continue
+
+                    gain = float(pid[field_name])
+                    if gain < 0:
+                        return jsonify({"error": f"PID {field_name.upper()} 不能为负数"}), 400
+
+                    raw_value = int(round(gain * 100))
+                    success, response, error = _send_config(axis, param_id, raw_value)
+                    if not success:
+                        return jsonify({"error": f"{field_name.upper()} 配置下发失败: {error}"}), 500
+
+                    applied.append({
+                        "axis": _axis_name(axis),
+                        "param": param_id.name.lower(),
+                        "value": gain,
+                        "raw_value": raw_value,
+                    })
+
+            limits = data.get("limits") or {}
+            if limits:
+                if axis == AxisType.ALL:
+                    return jsonify({"error": "限位配置必须指定单个轴"}), 400
+
+                axis_name = _axis_name(axis)
+                limit_params = {
+                    AxisType.PAN: (ConfigParamId.PAN_MIN_LIMIT, ConfigParamId.PAN_MAX_LIMIT),
+                    AxisType.TILT: (ConfigParamId.TILT_MIN_LIMIT, ConfigParamId.TILT_MAX_LIMIT),
+                    AxisType.RAIL: (ConfigParamId.RAIL_MIN_LIMIT, ConfigParamId.RAIL_MAX_LIMIT),
+                }
+                min_param, max_param = limit_params[axis]
+
+                if "min" in limits and limits["min"] is not None:
+                    min_value = float(limits["min"])
+                    valid, error = MotionValidator.validate_position(min_value, axis_name)
+                    if not valid:
+                        return jsonify({"error": error}), 400
+
+                    raw_value = _pack_limit_value(axis, min_value)
+                    success, response, error = _send_config(axis, min_param, raw_value)
+                    if not success:
+                        return jsonify({"error": f"最小限位下发失败: {error}"}), 500
+
+                    applied.append({
+                        "axis": axis_name,
+                        "param": min_param.name.lower(),
+                        "value": min_value,
+                        "raw_value": raw_value,
+                    })
+
+                if "max" in limits and limits["max"] is not None:
+                    max_value = float(limits["max"])
+                    valid, error = MotionValidator.validate_position(max_value, axis_name)
+                    if not valid:
+                        return jsonify({"error": error}), 400
+
+                    raw_value = _pack_limit_value(axis, max_value)
+                    success, response, error = _send_config(axis, max_param, raw_value)
+                    if not success:
+                        return jsonify({"error": f"最大限位下发失败: {error}"}), 500
+
+                    applied.append({
+                        "axis": axis_name,
+                        "param": max_param.name.lower(),
+                        "value": max_value,
+                        "raw_value": raw_value,
+                    })
+
+            watchdog = data.get("watchdog") or {}
+            if watchdog:
+                if "timeout_ms" in watchdog and watchdog["timeout_ms"] is not None:
+                    timeout_ms = int(watchdog["timeout_ms"])
+                    if timeout_ms <= 0 or timeout_ms > 0xFFFF:
+                        return jsonify({"error": "看门狗超时必须在 1..65535 ms 范围内"}), 400
+
+                    success, response, error = _send_config(
+                        AxisType.ALL,
+                        ConfigParamId.WATCHDOG_TIMEOUT_MS,
+                        timeout_ms,
+                    )
+                    if not success:
+                        return jsonify({"error": f"看门狗超时配置下发失败: {error}"}), 500
+
+                    applied.append({
+                        "axis": "all",
+                        "param": "watchdog_timeout_ms",
+                        "value": timeout_ms,
+                        "raw_value": timeout_ms,
+                    })
+
+                if "enabled" in watchdog and watchdog["enabled"] is not None:
+                    enabled = bool(watchdog["enabled"])
+                    raw_value = 1 if enabled else 0
+                    success, response, error = _send_config(
+                        AxisType.ALL,
+                        ConfigParamId.WATCHDOG_ENABLE,
+                        raw_value,
+                    )
+                    if not success:
+                        return jsonify({"error": f"看门狗使能配置下发失败: {error}"}), 500
+
+                    applied.append({
+                        "axis": "all",
+                        "param": "watchdog_enable",
+                        "value": enabled,
+                        "raw_value": raw_value,
+                    })
+
+            raw_updates = data.get("raw") or []
+            if raw_updates:
+                if not isinstance(raw_updates, list):
+                    return jsonify({"error": "raw 字段必须是数组"}), 400
+
+                for item in raw_updates:
+                    if not isinstance(item, dict):
+                        return jsonify({"error": "raw 数组项必须是对象"}), 400
+                    if "param" not in item or "value" not in item:
+                        return jsonify({"error": "raw 配置项缺少 param 或 value"}), 400
+
+                    item_axis = _parse_axis(item.get("axis"), default=_axis_name(axis))
+                    param_id = _parse_config_param(item["param"])
+                    raw_value = int(item["value"])
+
+                    success, response, error = _send_config(item_axis, param_id, raw_value)
+                    if not success:
+                        return jsonify({"error": f"raw 配置下发失败: {error}"}), 500
+
+                    applied.append({
+                        "axis": _axis_name(item_axis),
+                        "param": param_id.name.lower(),
+                        "value": raw_value,
+                        "raw_value": raw_value,
+                    })
+
+            if not applied:
+                return jsonify({"error": "没有可应用的配置项"}), 400
+
+            return jsonify({"status": "updated", "applied": applied})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/camera/status", methods=["GET"])
     def camera_status():
         """获取相机状态"""

@@ -1,69 +1,91 @@
 """
-通信管理器模块 - 封装串口通信，提供发送、接收、超时重试逻辑
+Jetson 侧串口通信管理器。
 """
 
+from collections import deque
+import logging
 import threading
 import time
-import logging
-from typing import Optional, Callable, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable, List, Optional, Tuple
 
 from .protocol import (
-    Command, CommandType, Response, 
-    encode_command, decode_response,
-    FRAME_HEAD, FRAME_TAIL,
-    get_next_seq, reset_seq
+    AxisType,
+    Command,
+    CommandType,
+    ConfigParamId,
+    FRAME_HEAD,
+    FRAME_MIN_LEN,
+    FRAME_TAIL,
+    Response,
+    config_param_from_value,
+    config_raw_value,
+    config_signed_value,
+    decode_response,
+    encode_command,
+    config_pack_value,
 )
+from .unit_converter import MotionValidator
 
 logger = logging.getLogger(__name__)
 
 
 class ConnectionState(Enum):
-    """连接状态枚举"""
-    DISCONNECTED = "disconnected"   # 未连接
-    CONNECTING = "connecting"       # 正在连接
-    CONNECTED = "connected"         # 已连接
-    RECONNECTING = "reconnecting"   # 正在重连
-    ERROR = "error"                 # 连接错误
+    """串口连接状态。"""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    ERROR = "error"
 
 
 @dataclass
 class CommConfig:
-    """通信配置"""
+    """串口通信配置。"""
+
     port: str = "/dev/ttyUSB0"
     baudrate: int = 115200
     timeout: float = 1.0
     retry_count: int = 3
     retry_delay: float = 0.1
-    auto_reconnect: bool = True         # 是否自动重连
-    reconnect_interval: float = 2.0     # 重连间隔（秒）
-    max_reconnect_attempts: int = 10    # 最大重连次数，0 表示无限
-    heartbeat_interval: float = 5.0     # 心跳检测间隔（秒）
-    heartbeat_timeout: float = 3.0      # 心跳超时时间（秒）
+    auto_reconnect: bool = True
+    reconnect_interval: float = 2.0
+    max_reconnect_attempts: int = 10
+    heartbeat_interval: float = 5.0
+    heartbeat_timeout: float = 3.0
+    trace_protocol: bool = False
+    trace_frames_hex: bool = False
+    trace_history_size: int = 200
+
+
+_AXIS_NAME_MAP = {
+    AxisType.PAN: "pan",
+    AxisType.TILT: "tilt",
+    AxisType.RAIL: "rail",
+}
+
+_AXIS_LIMIT_PARAM_MAP = {
+    AxisType.PAN: (ConfigParamId.PAN_MIN_LIMIT, ConfigParamId.PAN_MAX_LIMIT),
+    AxisType.TILT: (ConfigParamId.TILT_MIN_LIMIT, ConfigParamId.TILT_MAX_LIMIT),
+    AxisType.RAIL: (ConfigParamId.RAIL_MIN_LIMIT, ConfigParamId.RAIL_MAX_LIMIT),
+}
 
 
 class CommManager:
     """
-    串口通信管理器
-    
-    负责与 STM32 的串口通信，包括：
-    - 连接管理
-    - 指令发送和响应接收
-    - 超时重试机制
-    - 异步接收处理
-    - 连接状态回调通知
-    - 自动重连机制
-    - 心跳检测
+    管理 Jetson 到 STM32 的串口链路。
+
+    主要职责:
+    - 连接生命周期管理
+    - 同步命令收发
+    - 异步接收回调
+    - 断线重连与心跳保活
+    - 面向上层的具名 CONFIG helper
     """
-    
+
     def __init__(self, config: Optional[CommConfig] = None):
-        """
-        初始化通信管理器
-        
-        Args:
-            config: 通信配置，为 None 时使用默认配置
-        """
         self.config = config or CommConfig()
         self._serial = None
         self._lock = threading.Lock()
@@ -71,322 +93,605 @@ class CommManager:
         self._recv_thread: Optional[threading.Thread] = None
         self._recv_callback: Optional[Callable[[Response], None]] = None
         self._recv_buffer = bytearray()
-        
-        # 连接状态管理
+        self._trace_history = deque(maxlen=max(10, int(self.config.trace_history_size)))
+        self._trace_lock = threading.Lock()
+
         self._state = ConnectionState.DISCONNECTED
         self._state_callbacks: List[Callable[[ConnectionState, Optional[str]], None]] = []
         self._reconnect_thread: Optional[threading.Thread] = None
         self._reconnect_attempts = 0
         self._last_recv_time = 0.0
         self._heartbeat_thread: Optional[threading.Thread] = None
-    
+
     @property
     def state(self) -> ConnectionState:
-        """获取当前连接状态"""
         return self._state
-    
-    def _set_state(self, new_state: ConnectionState, reason: str = None):
-        """
-        设置连接状态并通知回调
-        
-        Args:
-            new_state: 新状态
-            reason: 状态变化原因
-        """
-        if self._state != new_state:
-            old_state = self._state
-            self._state = new_state
-            logger.info(f"连接状态变化: {old_state.value} -> {new_state.value}" + 
-                       (f" ({reason})" if reason else ""))
-            
-            # 通知所有回调
-            for callback in self._state_callbacks:
-                try:
-                    callback(new_state, reason)
-                except Exception as e:
-                    logger.error(f"状态回调执行错误: {e}")
-    
+
+    @staticmethod
+    def _axis_name(axis: AxisType) -> str:
+        mapping = {
+            AxisType.PAN: "pan",
+            AxisType.TILT: "tilt",
+            AxisType.RAIL: "rail",
+            AxisType.ALL: "all",
+        }
+        try:
+            return mapping[AxisType(int(axis))]
+        except Exception:
+            return str(axis)
+
+    def _describe_command(self, cmd: Command, wait_response: bool, attempt: int) -> str:
+        parts = [
+            f"seq={cmd.seq}",
+            f"cmd={cmd.type.name.lower()}",
+            f"axis={self._axis_name(cmd.axis)}",
+            f"wait_response={wait_response}",
+        ]
+
+        if self.config.retry_count > 1:
+            parts.append(f"attempt={attempt}")
+
+        if cmd.type in (
+            CommandType.POSITION,
+            CommandType.SET_VELOCITY,
+            CommandType.MOVE_ABSOLUTE,
+        ):
+            parts.append(f"value={cmd.value}")
+        elif cmd.type == CommandType.CONFIG:
+            try:
+                param_id = config_param_from_value(cmd.value)
+                raw_value = config_raw_value(cmd.value)
+                signed_value = config_signed_value(cmd.value)
+                parts.append(f"param={param_id.name.lower()}")
+                parts.append(f"raw_value={raw_value}")
+                if raw_value != signed_value:
+                    parts.append(f"signed_value={signed_value}")
+            except Exception:
+                parts.append(f"packed_value={cmd.value}")
+
+        return " ".join(parts)
+
+    @staticmethod
+    def _describe_response(response: Response, expected_seq: Optional[int] = None) -> str:
+        parts = [
+            f"seq={response.seq}",
+            f"rsp={response.type.name.lower()}",
+            f"status={response.status.name.lower()}",
+        ]
+
+        if expected_seq is not None:
+            parts.append(f"expected_seq={expected_seq}")
+
+        if getattr(response.type, "name", "") == "STATUS":
+            parts.extend([
+                f"pan={response.pan_pos}",
+                f"tilt={response.tilt_pos}",
+                f"rail={response.rail_pos}",
+            ])
+
+        return " ".join(parts)
+
+    def _log_command_trace(self, cmd: Command, wait_response: bool, attempt: int):
+        if not self.config.trace_protocol:
+            return
+        logger.info("[串口 TX] %s", self._describe_command(cmd, wait_response, attempt))
+
+    def _log_response_trace(
+        self,
+        response: Response,
+        source: str = "RX",
+        expected_seq: Optional[int] = None,
+    ):
+        if not self.config.trace_protocol:
+            return
+        logger.info("[串口 %s] %s", source, self._describe_response(response, expected_seq))
+
+    @staticmethod
+    def _format_frame_hex(frame: bytes) -> str:
+        return frame.hex(" ")
+
+    def _log_frame_trace(self, frame: bytes, source: str):
+        if not self.config.trace_frames_hex:
+            return
+        logger.info("[串口 %s] %s", source, self._format_frame_hex(frame))
+
+    def _record_trace(self, record: dict):
+        entry = {"timestamp": time.time(), **record}
+        with self._trace_lock:
+            self._trace_history.append(entry)
+
+    def _record_command_event(
+        self,
+        cmd: Command,
+        wait_response: bool,
+        attempt: int,
+        frame: bytes,
+    ):
+        record = {
+            "source": "TX",
+            "event": "command",
+            "seq": int(cmd.seq),
+            "command": cmd.type.name.lower(),
+            "axis": self._axis_name(cmd.axis),
+            "wait_response": bool(wait_response),
+            "attempt": int(attempt),
+            "frame_hex": self._format_frame_hex(frame),
+        }
+
+        if cmd.type in (
+            CommandType.POSITION,
+            CommandType.SET_VELOCITY,
+            CommandType.MOVE_ABSOLUTE,
+        ):
+            record["value"] = int(cmd.value)
+        elif cmd.type == CommandType.CONFIG:
+            try:
+                param_id = config_param_from_value(cmd.value)
+                raw_value = config_raw_value(cmd.value)
+                signed_value = config_signed_value(cmd.value)
+                record["param"] = param_id.name.lower()
+                record["raw_value"] = int(raw_value)
+                record["signed_value"] = int(signed_value)
+            except Exception:
+                record["packed_value"] = int(cmd.value)
+
+        self._record_trace(record)
+
+    def _record_response_event(
+        self,
+        response: Response,
+        source: str,
+        frame: bytes,
+        expected_seq: Optional[int] = None,
+    ):
+        record = {
+            "source": source,
+            "event": "response",
+            "seq": int(response.seq),
+            "response": response.type.name.lower(),
+            "status": response.status.name.lower(),
+            "frame_hex": self._format_frame_hex(frame),
+        }
+
+        if expected_seq is not None:
+            record["expected_seq"] = int(expected_seq)
+
+        if response.type.name == "STATUS":
+            record["pan"] = int(response.pan_pos)
+            record["tilt"] = int(response.tilt_pos)
+            record["rail"] = int(response.rail_pos)
+
+        self._record_trace(record)
+
+    def _record_invalid_frame_event(self, frame: bytes, error: str):
+        self._record_trace({
+            "source": "RX-INVALID",
+            "event": "invalid_frame",
+            "error": error,
+            "frame_hex": self._format_frame_hex(frame),
+        })
+
+    def get_trace_history(
+        self,
+        limit: Optional[int] = 100,
+        source: Optional[str] = None,
+        newest_first: bool = True,
+    ) -> List[dict]:
+        with self._trace_lock:
+            records = list(self._trace_history)
+
+        if source:
+            source_key = str(source).strip().upper()
+            records = [record for record in records if record.get("source", "").upper() == source_key]
+
+        if newest_first:
+            records.reverse()
+
+        if limit is not None:
+            records = records[: max(0, int(limit))]
+
+        return records
+
+    def clear_trace_history(self) -> int:
+        with self._trace_lock:
+            cleared = len(self._trace_history)
+            self._trace_history.clear()
+        return cleared
+
+    def get_trace_diagnostics(self, limit: Optional[int] = 100, source: Optional[str] = None) -> dict:
+        records = self.get_trace_history(limit=limit, source=source, newest_first=True)
+        with self._trace_lock:
+            total_records = len(self._trace_history)
+
+        return {
+            "connected": self.is_connected(),
+            "state": self.state.value,
+            "trace_protocol": self.config.trace_protocol,
+            "trace_frames_hex": self.config.trace_frames_hex,
+            "history_capacity": int(self._trace_history.maxlen or 0),
+            "history_count": total_records,
+            "returned_count": len(records),
+            "records": records,
+        }
+
+    def _set_state(self, new_state: ConnectionState, reason: Optional[str] = None):
+        if self._state == new_state:
+            return
+
+        old_state = self._state
+        self._state = new_state
+        logger.info(
+            "连接状态变更: %s -> %s%s",
+            old_state.value,
+            new_state.value,
+            f" ({reason})" if reason else "",
+        )
+
+        for callback in self._state_callbacks:
+            try:
+                callback(new_state, reason)
+            except Exception as exc:
+                logger.error("状态回调执行失败: %s", exc)
+
     def add_state_callback(self, callback: Callable[[ConnectionState, Optional[str]], None]):
-        """
-        添加连接状态变化回调
-        
-        Args:
-            callback: 回调函数，参数为 (新状态, 原因)
-        """
         if callback not in self._state_callbacks:
             self._state_callbacks.append(callback)
-    
+
     def remove_state_callback(self, callback: Callable[[ConnectionState, Optional[str]], None]):
-        """
-        移除连接状态变化回调
-        
-        Args:
-            callback: 要移除的回调函数
-        """
         if callback in self._state_callbacks:
             self._state_callbacks.remove(callback)
-    
+
     def connect(self) -> bool:
-        """
-        建立串口连接
-        
-        Returns:
-            连接是否成功
-        """
         self._set_state(ConnectionState.CONNECTING)
-        
+
         try:
             import serial
+
             self._serial = serial.Serial(
                 port=self.config.port,
                 baudrate=self.config.baudrate,
-                timeout=self.config.timeout
+                timeout=self.config.timeout,
             )
             self._running = True
             self._reconnect_attempts = 0
             self._last_recv_time = time.time()
             self._set_state(ConnectionState.CONNECTED)
-            
-            # 启动心跳检测
+
             if self.config.heartbeat_interval > 0:
                 self._start_heartbeat()
-            
+
             return True
-        except Exception as e:
-            logger.error(f"串口连接失败: {e}")
-            self._set_state(ConnectionState.ERROR, str(e))
-            
-            # 尝试自动重连
+        except Exception as exc:
+            logger.error("串口连接失败: %s", exc)
+            self._set_state(ConnectionState.ERROR, str(exc))
             if self.config.auto_reconnect:
                 self._start_reconnect()
-            
             return False
-    
+
     def disconnect(self):
-        """断开串口连接"""
         self._running = False
-        
-        # 停止心跳线程
+
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=1.0)
-        
-        # 停止重连线程
         if self._reconnect_thread and self._reconnect_thread.is_alive():
             self._reconnect_thread.join(timeout=1.0)
-        
-        # 停止接收线程
         if self._recv_thread and self._recv_thread.is_alive():
             self._recv_thread.join(timeout=1.0)
-        
+
         if self._serial:
             self._serial.close()
             self._serial = None
-        
-        self._set_state(ConnectionState.DISCONNECTED, "主动断开")
-    
+
+        self._set_state(ConnectionState.DISCONNECTED, "手动断开")
+
     def is_connected(self) -> bool:
-        """检查是否已连接"""
         return self._serial is not None and self._serial.is_open
-    
+
     def _start_reconnect(self):
-        """启动重连线程"""
         if self._reconnect_thread and self._reconnect_thread.is_alive():
             return
-        
+
         self._reconnect_thread = threading.Thread(target=self._reconnect_loop, daemon=True)
         self._reconnect_thread.start()
-    
+
     def _reconnect_loop(self):
-        """重连循环"""
         while self._running or self._state == ConnectionState.ERROR:
-            # 检查重连次数限制
-            if (self.config.max_reconnect_attempts > 0 and 
-                self._reconnect_attempts >= self.config.max_reconnect_attempts):
-                logger.error(f"达到最大重连次数 ({self.config.max_reconnect_attempts})，停止重连")
-                self._set_state(ConnectionState.ERROR, "达到最大重连次数")
+            if (
+                self.config.max_reconnect_attempts > 0
+                and self._reconnect_attempts >= self.config.max_reconnect_attempts
+            ):
+                message = f"重连次数超过上限 ({self.config.max_reconnect_attempts})"
+                logger.error(message)
+                self._set_state(ConnectionState.ERROR, message)
                 return
-            
+
             self._reconnect_attempts += 1
-            self._set_state(ConnectionState.RECONNECTING, 
-                           f"第 {self._reconnect_attempts} 次重连")
-            
-            logger.info(f"尝试重连 ({self._reconnect_attempts})...")
-            
+            self._set_state(
+                ConnectionState.RECONNECTING,
+                f"第 {self._reconnect_attempts} 次重连",
+            )
+            logger.info("正在尝试重连（第 %s 次）...", self._reconnect_attempts)
+
             try:
                 import serial
+
                 self._serial = serial.Serial(
                     port=self.config.port,
                     baudrate=self.config.baudrate,
-                    timeout=self.config.timeout
+                    timeout=self.config.timeout,
                 )
                 self._running = True
                 self._reconnect_attempts = 0
                 self._last_recv_time = time.time()
                 self._set_state(ConnectionState.CONNECTED, "重连成功")
-                
-                # 重新启动心跳检测
+
                 if self.config.heartbeat_interval > 0:
                     self._start_heartbeat()
-                
+
                 return
-            except Exception as e:
-                logger.warning(f"重连失败: {e}")
-            
-            # 等待后重试
+            except Exception as exc:
+                logger.warning("重连失败: %s", exc)
+
             time.sleep(self.config.reconnect_interval)
-    
+
     def _start_heartbeat(self):
-        """启动心跳检测线程"""
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             return
-        
+
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self._heartbeat_thread.start()
-    
+
     def _heartbeat_loop(self):
-        """
-        心跳检测循环
-        
-        定期检查连接状态，如果超时未收到数据则触发重连
-        """
         while self._running and self.is_connected():
             time.sleep(self.config.heartbeat_interval)
-            
-            # 检查线程是否应该退出
             if not self._running:
                 break
-            
-            # 检查是否超时未收到数据
+
             elapsed = time.time() - self._last_recv_time
-            if elapsed > self.config.heartbeat_timeout + self.config.heartbeat_interval:
-                # 主动发送心跳探测，避免“链路空闲但健康”被误判为断线
-                heartbeat_cmd = Command(type=CommandType.STATUS)
-                response, error = self.send_command(heartbeat_cmd, wait_response=True)
-                if response is not None:
-                    self._last_recv_time = time.time()
-                    continue
-                
-                logger.warning(f"心跳探测失败 ({elapsed:.1f}s): {error}")
-                self._handle_connection_lost("心跳探测失败")
-                break
-    
+            if elapsed <= self.config.heartbeat_timeout + self.config.heartbeat_interval:
+                continue
+
+            heartbeat_cmd = Command(type=CommandType.STATUS)
+            response, error = self.send_command(heartbeat_cmd, wait_response=True)
+            if response is not None:
+                self._last_recv_time = time.time()
+                continue
+
+            logger.warning("心跳探测在 %.1f 秒后失败: %s", elapsed, error)
+            self._handle_connection_lost("心跳探测失败")
+            break
+
     def _handle_connection_lost(self, reason: str):
-        """
-        处理连接丢失
-        
-        Args:
-            reason: 丢失原因
-        """
         if self._serial:
             try:
                 self._serial.close()
             except Exception:
-                # 关闭串口失败，忽略
                 pass
             self._serial = None
-        
+
         self._set_state(ConnectionState.ERROR, reason)
-        
-        # 尝试自动重连
         if self.config.auto_reconnect:
             self._start_reconnect()
 
     def send_command(self, cmd: Command, wait_response: bool = True) -> Tuple[Optional[Response], str]:
         """
-        发送指令并等待响应（带序列号匹配）
-        
-        Args:
-            cmd: 要发送的指令
-            wait_response: 是否等待响应
-            
-        Returns:
-            (响应对象, 错误信息) - 成功时错误信息为空字符串
+        发送命令，并按需等待具有相同序列号的响应。
         """
+
         if not self.is_connected():
-            return None, "未连接"
-        
-        # 编码指令（自动分配序列号）
+            return None, "串口未连接"
+
         frame = encode_command(cmd, auto_seq=True)
         expected_seq = cmd.seq
-        
+
         for attempt in range(self.config.retry_count):
             with self._lock:
                 try:
                     self._serial.write(frame)
-                    
+                    self._record_command_event(cmd, wait_response, attempt + 1, frame)
+                    self._log_command_trace(cmd, wait_response, attempt + 1)
+                    self._log_frame_trace(frame, source="TX-FRAME")
+
                     if not wait_response:
                         return None, ""
-                    
-                    # 等待响应（带序列号匹配）
+
                     response = self._read_response_with_seq(expected_seq)
-                    if response:
+                    if response is not None:
                         self._last_recv_time = time.time()
                         return response, ""
-                    
-                    logger.warning(f"发送失败 (尝试 {attempt + 1}/{self.config.retry_count}): 响应超时或序列号不匹配")
-                        
-                except Exception as e:
-                    logger.warning(f"发送失败 (尝试 {attempt + 1}): {e}")
-                    
-                    # 检查是否是连接问题
+
+                    logger.warning(
+                        "命令发送失败（%s/%s）：响应超时或序列号不匹配",
+                        attempt + 1,
+                        self.config.retry_count,
+                    )
+                except Exception as exc:
+                    logger.warning("命令发送失败（第 %s 次）: %s", attempt + 1, exc)
                     if not self.is_connected():
-                        self._handle_connection_lost(f"发送时连接丢失: {e}")
-                        return None, f"连接丢失: {e}"
-            
+                        self._handle_connection_lost(f"发送命令时连接断开: {exc}")
+                        return None, f"连接断开: {exc}"
+
             if attempt < self.config.retry_count - 1:
                 time.sleep(self.config.retry_delay)
-        
-        return None, f"发送失败: 重试 {self.config.retry_count} 次后仍无响应"
-    
+
+        return None, f"命令发送失败，已重试 {self.config.retry_count} 次"
+
+    def send_config(
+        self,
+        axis: AxisType,
+        param_id: ConfigParamId,
+        raw_value: int,
+        wait_response: bool = True,
+    ) -> Tuple[Optional[Response], str]:
+        """使用统一打包格式发送一条通用 CONFIG 命令。"""
+
+        cmd = Command(
+            type=CommandType.CONFIG,
+            axis=axis,
+            value=config_pack_value(param_id, raw_value),
+        )
+        return self.send_command(cmd, wait_response=wait_response)
+
+    def configure_pid(
+        self,
+        axis: AxisType,
+        p: Optional[float] = None,
+        i: Optional[float] = None,
+        d: Optional[float] = None,
+    ) -> Tuple[Optional[Response], str]:
+        """为单个轴配置 PID，编码规则为 `增益 * 100`。"""
+
+        if axis == AxisType.ALL:
+            return None, "PID 配置必须指定具体轴"
+
+        updates = []
+        if p is not None:
+            if p < 0:
+                return None, "PID P 不能为负数"
+            updates.append((ConfigParamId.PID_P, int(round(p * 100))))
+        if i is not None:
+            if i < 0:
+                return None, "PID I 不能为负数"
+            updates.append((ConfigParamId.PID_I, int(round(i * 100))))
+        if d is not None:
+            if d < 0:
+                return None, "PID D 不能为负数"
+            updates.append((ConfigParamId.PID_D, int(round(d * 100))))
+
+        if not updates:
+            return None, "未提供任何 PID 字段"
+
+        return self._send_config_updates(axis, updates)
+
+    def configure_watchdog(
+        self,
+        timeout_ms: Optional[int] = None,
+        enabled: Optional[bool] = None,
+    ) -> Tuple[Optional[Response], str]:
+        """配置看门狗超时和使能状态。"""
+
+        updates = []
+        if timeout_ms is not None:
+            if timeout_ms <= 0 or timeout_ms > 0xFFFF:
+                return None, "看门狗超时必须在 1..65535 ms 范围内"
+            updates.append((ConfigParamId.WATCHDOG_TIMEOUT_MS, int(timeout_ms)))
+        if enabled is not None:
+            updates.append((ConfigParamId.WATCHDOG_ENABLE, 1 if enabled else 0))
+
+        if not updates:
+            return None, "未提供任何看门狗字段"
+
+        return self._send_config_updates(AxisType.ALL, updates)
+
+    def configure_axis_limits(
+        self,
+        axis: AxisType,
+        minimum: Optional[float] = None,
+        maximum: Optional[float] = None,
+    ) -> Tuple[Optional[Response], str]:
+        """使用 Jetson 侧的人类可读单位配置各轴行程限位。"""
+
+        if axis not in _AXIS_LIMIT_PARAM_MAP:
+            return None, "限位配置只支持 pan、tilt 或 rail"
+
+        axis_name = _AXIS_NAME_MAP[axis]
+        min_param, max_param = _AXIS_LIMIT_PARAM_MAP[axis]
+        updates = []
+
+        if minimum is not None:
+            valid, error = MotionValidator.validate_position(minimum, axis_name)
+            if not valid:
+                return None, error
+            updates.append((min_param, self._position_to_limit_raw(axis, minimum)))
+
+        if maximum is not None:
+            valid, error = MotionValidator.validate_position(maximum, axis_name)
+            if not valid:
+                return None, error
+            updates.append((max_param, self._position_to_limit_raw(axis, maximum)))
+
+        if not updates:
+            return None, "未提供任何限位字段"
+
+        return self._send_config_updates(axis, updates)
+
+    def _send_config_updates(
+        self,
+        axis: AxisType,
+        updates: List[Tuple[ConfigParamId, int]],
+    ) -> Tuple[Optional[Response], str]:
+        response = None
+        for param_id, raw_value in updates:
+            response, error = self.send_config(axis, param_id, raw_value, wait_response=True)
+            if response is None:
+                return None, error
+        return response, ""
+
+    @staticmethod
+    def _position_to_limit_raw(axis: AxisType, value: float) -> int:
+        raw_value = int(round(value * 100))
+        if axis == AxisType.RAIL:
+            if raw_value < 0 or raw_value > 0xFFFF:
+                raise ValueError("Rail 限位超出 16 位无符号范围")
+            return raw_value
+        if raw_value < -0x8000 or raw_value > 0x7FFF:
+            raise ValueError("角度限位超出 16 位有符号范围")
+        return raw_value
+
     def _read_response_with_seq(self, expected_seq: int) -> Optional[Response]:
-        """
-        读取响应帧（带序列号匹配）
-        
-        Args:
-            expected_seq: 期望的序列号
-            
-        Returns:
-            响应对象，失败返回 None
-        """
         buffer = bytearray()
         start_time = time.time()
-        
+
         while time.time() - start_time < self.config.timeout:
             try:
-                if self._serial.in_waiting > 0:
-                    byte = self._serial.read(1)
-                    if byte:
-                        buffer.extend(byte)
-                        
-                        # 检查是否收到完整帧
-                        if len(buffer) >= 7 and buffer[-1] == FRAME_TAIL:
-                            response, error = decode_response(bytes(buffer))
-                            if response:
-                                # 检查序列号匹配
-                                if response.seq == expected_seq:
-                                    return response
-                                else:
-                                    logger.warning(f"序列号不匹配: 期望 {expected_seq}, 收到 {response.seq}")
-                            buffer.clear()
-            except Exception as e:
-                logger.error(f"读取响应错误: {e}")
+                if self._serial.in_waiting <= 0:
+                    time.sleep(0.001)
+                    continue
+
+                byte = self._serial.read(1)
+                if not byte:
+                    continue
+
+                buffer.extend(byte)
+                if len(buffer) < FRAME_MIN_LEN or buffer[-1] != FRAME_TAIL:
+                    continue
+
+                frame = bytes(buffer)
+                response, error = decode_response(frame)
+                if response is not None:
+                    self._log_frame_trace(frame, source="RX-FRAME")
+                    if response.seq == expected_seq:
+                        self._record_response_event(response, "RX", frame, expected_seq=expected_seq)
+                        self._log_response_trace(response, source="RX", expected_seq=expected_seq)
+                        return response
+                    self._record_response_event(
+                        response,
+                        "RX-UNMATCHED",
+                        frame,
+                        expected_seq=expected_seq,
+                    )
+                    self._log_response_trace(response, source="RX-UNMATCHED", expected_seq=expected_seq)
+                    logger.warning(
+                        "序列号不匹配：期望 %s，收到 %s",
+                        expected_seq,
+                        response.seq,
+                    )
+                elif error:
+                    self._record_invalid_frame_event(frame, error)
+                    self._log_frame_trace(frame, source="RX-FRAME-INVALID")
+                buffer.clear()
+            except Exception as exc:
+                logger.error("读取响应失败: %s", exc)
                 break
-        
+
         return None
-    
+
     def start_async_receive(self, callback: Callable[[Response], None]):
-        """
-        启动异步接收线程
-        
-        Args:
-            callback: 收到响应时的回调函数
-        """
         self._recv_callback = callback
         self._recv_thread = threading.Thread(target=self._async_receive_loop, daemon=True)
         self._recv_thread.start()
-    
+
     def _async_receive_loop(self):
-        """异步接收循环"""
         while self._running and self.is_connected():
             try:
                 if self._serial.in_waiting > 0:
@@ -397,28 +702,35 @@ class CommManager:
                         self._process_recv_buffer()
                 else:
                     time.sleep(0.001)
-            except Exception as e:
-                logger.error(f"异步接收错误: {e}")
+            except Exception as exc:
+                logger.error("异步接收失败: %s", exc)
                 if not self.is_connected():
-                    self._handle_connection_lost(f"接收时连接丢失: {e}")
+                    self._handle_connection_lost(f"接收数据时连接断开: {exc}")
                     break
                 time.sleep(0.1)
-    
+
     def _process_recv_buffer(self):
-        """处理接收缓冲区"""
-        # 查找帧头
         while len(self._recv_buffer) > 0 and self._recv_buffer[0] != FRAME_HEAD:
             self._recv_buffer.pop(0)
-        
-        # 检查是否有完整帧
-        if len(self._recv_buffer) >= 6:
-            # 查找帧尾
-            for i in range(5, len(self._recv_buffer)):
-                if self._recv_buffer[i] == FRAME_TAIL:
-                    frame = bytes(self._recv_buffer[:i+1])
-                    self._recv_buffer = self._recv_buffer[i+1:]
-                    
-                    response, error = decode_response(frame)
-                    if response and self._recv_callback:
-                        self._recv_callback(response)
-                    break
+
+        if len(self._recv_buffer) < FRAME_MIN_LEN:
+            return
+
+        for index in range(FRAME_MIN_LEN - 1, len(self._recv_buffer)):
+            if self._recv_buffer[index] != FRAME_TAIL:
+                continue
+
+            frame = bytes(self._recv_buffer[: index + 1])
+            self._recv_buffer = self._recv_buffer[index + 1 :]
+
+            response, error = decode_response(frame)
+            if response is not None:
+                self._record_response_event(response, "RX-ASYNC", frame)
+                self._log_frame_trace(frame, source="RX-FRAME")
+                self._log_response_trace(response, source="RX-ASYNC")
+                if self._recv_callback:
+                    self._recv_callback(response)
+            elif error:
+                self._record_invalid_frame_event(frame, error)
+                self._log_frame_trace(frame, source="RX-FRAME-INVALID")
+            break

@@ -63,15 +63,121 @@ class MockCameraController:
         return ImagePair(), None
 
 
+class MockObjectDetector:
+    """模拟目标检测器"""
+
+    def __init__(self):
+        self._config = {
+            "model_path": "models/yolov5s.engine",
+            "threshold": 0.5,
+            "nms_threshold": 0.45,
+        }
+
+    def get_config(self):
+        class Config:
+            def __init__(self, data):
+                self._data = data
+
+            def to_dict(self):
+                return dict(self._data)
+
+        return Config(self._config)
+
+    def set_config(self, config):
+        if hasattr(config, "to_dict"):
+            self._config = config.to_dict()
+        elif isinstance(config, dict):
+            self._config = dict(config)
+
+    def is_loaded(self):
+        return True
+
+    def is_simulation_mode(self):
+        return False
+
+    def get_inference_engine(self):
+        return "tensorrt"
+
+    def get_runtime_status(self):
+        return {
+            "loaded": True,
+            "simulation_mode": False,
+            "inference_engine": "tensorrt",
+            "tensorrt_available": True,
+            "model_path": self._config["model_path"],
+            "model_exists": True,
+            "last_error": None,
+        }
+
+
 class MockCommManager:
     """模拟通信管理器"""
+
+    def __init__(self):
+        self.commands = []
+        self.trace_history = [
+            {
+                "timestamp": time.time(),
+                "source": "TX",
+                "event": "command",
+                "seq": 1,
+                "command": "status",
+                "axis": "all",
+                "wait_response": True,
+                "attempt": 1,
+                "frame_hex": "aa 01 01 02 00 00 55",
+            },
+            {
+                "timestamp": time.time(),
+                "source": "RX",
+                "event": "response",
+                "seq": 1,
+                "response": "status",
+                "status": "ok",
+                "frame_hex": "aa 01 0e 82 00 00 00 00 00 00 00 00 00 00 00 00 55",
+            },
+        ]
+        self.connected = True
+        self.trace_protocol = False
+        self.trace_frames_hex = False
     
-    def send_command(self, cmd):
+    def send_command(self, cmd, wait_response=True):
+        self.commands.append({
+            "type": int(cmd.type),
+            "axis": int(cmd.axis),
+            "value": int(cmd.value),
+            "wait_response": wait_response,
+        })
         # 返回成功和模拟响应
         class MockResponse:
             status = "ok"
             error_code = 0
         return True, MockResponse()
+
+    def get_trace_diagnostics(self, limit=100, source=None):
+        records = list(self.trace_history)
+        if source:
+            source_key = str(source).strip().upper()
+            records = [record for record in records if record.get("source", "").upper() == source_key]
+        records = list(reversed(records))
+        if limit is not None:
+            records = records[:limit]
+
+        return {
+            "connected": self.connected,
+            "state": "connected",
+            "trace_protocol": self.trace_protocol,
+            "trace_frames_hex": self.trace_frames_hex,
+            "history_capacity": 200,
+            "history_count": len(self.trace_history),
+            "returned_count": len(records),
+            "records": records,
+        }
+
+    def clear_trace_history(self):
+        cleared = len(self.trace_history)
+        self.trace_history = []
+        return cleared
 
 
 class MockTaskScheduler:
@@ -128,6 +234,7 @@ def web_server():
     # 注入模拟依赖
     state_manager = StateManager()
     camera = MockCameraController()
+    detector = MockObjectDetector()
     comm = MockCommManager()
     scheduler = MockTaskScheduler()
     
@@ -135,7 +242,8 @@ def web_server():
         state_manager=state_manager,
         camera_controller=camera,
         comm_manager=comm,
-        task_scheduler=scheduler
+        task_scheduler=scheduler,
+        object_detector=detector
     )
     
     # 启动服务器
@@ -159,6 +267,7 @@ def test_web_server_health(web_server):
     assert "components" in data
     assert data["components"]["state_manager"] is True
     assert data["components"]["camera"] is True
+    assert data["components"]["detector_loaded"] is True
     
     print("✅ Web 服务器健康检查通过")
 
@@ -172,6 +281,10 @@ def test_api_status(web_server):
     assert "system" in data
     assert "motion" in data
     assert "detection" in data
+    assert "runtime" in data
+    assert data["runtime"]["detector"]["enabled"] is True
+    assert data["runtime"]["detector"]["loaded"] is True
+    assert data["runtime"]["detector"]["inference_engine"] == "tensorrt"
     
     print("✅ 状态 API 测试通过")
 
@@ -207,8 +320,64 @@ def test_api_motion_move(web_server):
     
     data = response.json()
     assert data["status"] == "accepted"
+    assert len(web_server.app.comm_manager.commands) == 3
     
     print("✅ 运动控制 API 测试通过")
+
+
+def test_api_motion_config(web_server):
+    """测试运动配置 API"""
+    response = requests.post(
+        "http://127.0.0.1:8888/api/motion/config",
+        json={
+            "axis": "pan",
+            "pid": {"p": 1.5},
+            "limits": {"min": -90.0, "max": 90.0},
+            "watchdog": {"timeout_ms": 3000, "enabled": True},
+            "raw": [{"param": "max_velocity", "value": 2500}],
+        }
+    )
+    
+    assert response.status_code == 200
+    
+    data = response.json()
+    assert data["status"] == "updated"
+    assert len(data["applied"]) == 5
+    
+    commands = web_server.app.comm_manager.commands
+    assert len(commands) >= 5
+    assert commands[-1]["type"] == 0x03
+    
+    print("✅ 运动配置 API 测试通过")
+
+
+def test_api_comm_diagnostics(web_server):
+    """测试串口诊断 API"""
+    response = requests.get("http://127.0.0.1:8888/api/comm/diagnostics?limit=1")
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["connected"] is True
+    assert data["state"] == "connected"
+    assert data["history_count"] == 2
+    assert data["returned_count"] == 1
+    assert len(data["records"]) == 1
+    assert data["records"][0]["source"] == "RX"
+
+    clear_response = requests.post("http://127.0.0.1:8888/api/comm/diagnostics/clear")
+    assert clear_response.status_code == 200
+    clear_data = clear_response.json()
+    assert clear_data["status"] == "cleared"
+    assert clear_data["cleared"] == 2
+
+    after_clear = requests.get("http://127.0.0.1:8888/api/comm/diagnostics")
+    assert after_clear.status_code == 200
+    after_data = after_clear.json()
+    assert after_data["history_count"] == 0
+    assert after_data["records"] == []
+
+    print("✅ 串口诊断 API 测试通过")
 
 
 def test_api_camera_status(web_server):
@@ -304,6 +473,10 @@ def test_frontend_page(web_server):
     assert "相机位置控制系统" in html
     assert "videoStream" in html
     assert "app.js" in html
+    assert "detectorStatus" in html
+    assert "detectorMeta" in html
+    assert "commTraceList" in html
+    assert "串口诊断" in html
     
     print("✅ 前端页面加载测试通过")
 

@@ -10,6 +10,7 @@ let currentMode = 'auto';
 let isAutoCapturing = false;
 let targets = [];
 let selectedTargetId = null;
+let currentCommTraceSource = '';
 
 // DOM 元素
 const elements = {
@@ -20,10 +21,16 @@ const elements = {
     panPosition: document.getElementById('panPosition'),
     tiltPosition: document.getElementById('tiltPosition'),
     railPosition: document.getElementById('railPosition'),
+    detectorStatus: document.getElementById('detectorStatus'),
+    detectorMeta: document.getElementById('detectorMeta'),
     targetList: document.getElementById('targetList'),
     captureProgress: document.getElementById('captureProgress'),
     captureStatus: document.getElementById('captureStatus'),
     logPanel: document.getElementById('logPanel'),
+    commTraceMeta: document.getElementById('commTraceMeta'),
+    commTraceCount: document.getElementById('commTraceCount'),
+    commTraceList: document.getElementById('commTraceList'),
+    commTraceSource: document.getElementById('commTraceSource'),
     modeAuto: document.getElementById('modeAuto'),
     modeManual: document.getElementById('modeManual'),
     modeFace: document.getElementById('modeFace'),
@@ -76,10 +83,79 @@ async function api(endpoint, method = 'GET', data = null) {
     }
 }
 
+async function apiSilent(endpoint, method = 'GET', data = null) {
+    const options = {
+        method,
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    };
+
+    if (data) {
+        options.body = JSON.stringify(data);
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`, options);
+        const result = await response.json();
+        if (!response.ok) {
+            return null;
+        }
+        return result;
+    } catch (error) {
+        return null;
+    }
+}
+
 // 更新连接状态
 function updateConnectionStatus(connected) {
     elements.connectionStatus.textContent = connected ? '已连接' : '断开连接';
     elements.connectionStatus.className = connected ? 'status-badge' : 'status-badge error';
+}
+
+function updateDetectorRuntime(detectorState) {
+    if (!elements.detectorStatus || !elements.detectorMeta) {
+        return;
+    }
+
+    if (!detectorState || detectorState.enabled === false) {
+        elements.detectorStatus.textContent = '检测器未初始化';
+        elements.detectorMeta.textContent = '模型: --';
+        return;
+    }
+
+    if (detectorState.loaded) {
+        if (detectorState.simulation_mode) {
+            elements.detectorStatus.textContent = '检测器已加载（模拟模式）';
+        } else if (detectorState.inference_engine === 'tensorrt') {
+            elements.detectorStatus.textContent = 'TensorRT 推理已启用';
+        } else {
+            const engineName = detectorState.inference_engine || 'unknown';
+            elements.detectorStatus.textContent = `检测器已加载（${engineName}）`;
+        }
+    } else {
+        elements.detectorStatus.textContent = '检测模型未加载';
+    }
+
+    const metaParts = [];
+    if (detectorState.model_path) {
+        metaParts.push(`模型: ${detectorState.model_path}`);
+    }
+
+    if (detectorState.loaded) {
+        const engineName = detectorState.inference_engine || 'unknown';
+        metaParts.push(`引擎: ${engineName}`);
+    }
+
+    if (detectorState.tensorrt_available !== null && detectorState.tensorrt_available !== undefined) {
+        metaParts.push(`TensorRT: ${detectorState.tensorrt_available ? '可用' : '不可用'}`);
+    }
+
+    if (detectorState.last_error) {
+        metaParts.push(`错误: ${detectorState.last_error}`);
+    }
+
+    elements.detectorMeta.textContent = metaParts.join(' | ') || '模型: --';
 }
 
 // 更新位置显示
@@ -135,6 +211,124 @@ function updateAutoCaptureStatus(progress) {
     elements.captureStatus.textContent = statusText;
 }
 
+function formatTraceTimestamp(timestamp) {
+    if (!timestamp) return '--:--:--';
+    return new Date(timestamp * 1000).toLocaleTimeString();
+}
+
+function renderTraceDetails(record) {
+    const parts = [];
+
+    if (record.seq !== undefined) {
+        parts.push(`seq=${record.seq}`);
+    }
+    if (record.command) {
+        parts.push(`cmd=${record.command}`);
+    }
+    if (record.response) {
+        parts.push(`rsp=${record.response}`);
+    }
+    if (record.axis) {
+        parts.push(`axis=${record.axis}`);
+    }
+    if (record.status) {
+        parts.push(`status=${record.status}`);
+    }
+    if (record.param) {
+        parts.push(`param=${record.param}`);
+    }
+    if (record.value !== undefined) {
+        parts.push(`value=${record.value}`);
+    }
+    if (record.raw_value !== undefined) {
+        parts.push(`raw=${record.raw_value}`);
+    }
+    if (record.expected_seq !== undefined) {
+        parts.push(`expected=${record.expected_seq}`);
+    }
+    if (record.error) {
+        parts.push(`error=${record.error}`);
+    }
+
+    return parts.join('  ');
+}
+
+function updateCommDiagnosticsPanel(data) {
+    if (!elements.commTraceList || !elements.commTraceMeta || !elements.commTraceCount) {
+        return;
+    }
+
+    if (!data) {
+        elements.commTraceMeta.textContent = '诊断接口不可用';
+        elements.commTraceCount.textContent = '--';
+        elements.commTraceList.innerHTML = '<div class="trace-empty">当前无法获取串口诊断信息</div>';
+        return;
+    }
+
+    const metaParts = [
+        `状态: ${data.state || 'unknown'}`,
+        `协议日志: ${data.trace_protocol ? '开' : '关'}`,
+        `帧日志: ${data.trace_frames_hex ? '开' : '关'}`
+    ];
+    elements.commTraceMeta.textContent = metaParts.join(' · ');
+    elements.commTraceCount.textContent = `${data.returned_count ?? 0} / ${data.history_count ?? 0}`;
+
+    const records = data.records || [];
+    if (records.length === 0) {
+        elements.commTraceList.innerHTML = '<div class="trace-empty">暂无串口诊断记录</div>';
+        return;
+    }
+
+    elements.commTraceList.innerHTML = records.map(record => {
+        const source = String(record.source || '').toLowerCase();
+        const title = record.command || record.response || record.event || 'trace';
+        const details = renderTraceDetails(record);
+        const frameHex = record.frame_hex
+            ? (record.frame_hex.length > 96 ? `${record.frame_hex.slice(0, 96)}...` : record.frame_hex)
+            : '';
+
+        return `
+            <div class="trace-item ${source}">
+                <div class="trace-head">
+                    <div class="trace-title">
+                        <span class="trace-badge">${record.source || 'TRACE'}</span>
+                        <span class="trace-name">${title}</span>
+                    </div>
+                    <span class="trace-time">${formatTraceTimestamp(record.timestamp)}</span>
+                </div>
+                <div class="trace-details">${details || '无附加字段'}</div>
+                ${frameHex ? `<div class="trace-frame" title="${record.frame_hex}">${frameHex}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+async function refreshCommDiagnostics() {
+    const params = new URLSearchParams();
+    params.set('limit', '8');
+    if (currentCommTraceSource) {
+        params.set('source', currentCommTraceSource);
+    }
+
+    const result = await apiSilent(`/api/comm/diagnostics?${params.toString()}`);
+    updateCommDiagnosticsPanel(result);
+}
+
+async function clearCommDiagnostics() {
+    try {
+        const result = await api('/api/comm/diagnostics/clear', 'POST');
+        log(`🧹 已清空 ${result.cleared ?? 0} 条串口诊断记录`);
+        refreshCommDiagnostics();
+    } catch (error) {
+        // 错误已在 api 函数中记录
+    }
+}
+
+function setCommTraceSource(source) {
+    currentCommTraceSource = source || '';
+    refreshCommDiagnostics();
+}
+
 // 轮询状态
 async function pollStatus() {
     try {
@@ -155,6 +349,8 @@ async function pollStatus() {
         if (status.detection) {
             updateTargets(status.detection.targets, status.detection.selected_target_id);
         }
+
+        updateDetectorRuntime(status.runtime ? status.runtime.detector : null);
         
         // 更新自动拍摄
         const autoStatus = await api('/api/auto/status');
@@ -302,8 +498,10 @@ elements.videoStream.onerror = () => {
 // 初始化
 log('🚀 系统启动');
 pollStatus();
+refreshCommDiagnostics();
 loadRegisteredFaces();
 setInterval(pollStatus, 1000);
+setInterval(refreshCommDiagnostics, 2000);
 setInterval(updateFaceTrackingStatus, 500);
 
 // ==================== 人脸识别功能 ====================

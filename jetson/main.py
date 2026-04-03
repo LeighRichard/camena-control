@@ -192,7 +192,11 @@ class CameraControlSystem:
         
         comm_config = CommConfig(
             port=self.config.comm.port,
-            baudrate=self.config.comm.baudrate
+            baudrate=self.config.comm.baudrate,
+            timeout=self.config.comm.timeout,
+            trace_protocol=self.config.comm.trace_protocol,
+            trace_frames_hex=self.config.comm.trace_frames_hex,
+            trace_history_size=self.config.comm.trace_history_size,
         )
         
         self.comm = CommManager(config=comm_config)
@@ -218,7 +222,22 @@ class CameraControlSystem:
         )
         
         self.detector = ObjectDetector(det_config)
-        logger.info("✓ 目标检测器已初始化")
+        success, message = self.detector.load_model()
+        if hasattr(self.detector, "_last_load_error"):
+            self.detector._last_load_error = None if success else message
+
+        detector_status = (
+            self.detector.get_runtime_status()
+            if hasattr(self.detector, "get_runtime_status")
+            else {}
+        )
+
+        if success:
+            engine = detector_status.get("inference_engine") or "unknown"
+            model_path = detector_status.get("model_path") or "(unset)"
+            logger.info(f"✓ 目标检测器已初始化: {engine} [{model_path}]")
+        else:
+            logger.warning(f"✗ 目标检测模型加载失败: {message}")
     
     def _init_face_recognizer(self):
         """初始化人脸识别器"""
@@ -241,8 +260,13 @@ class CameraControlSystem:
     
     def _init_visual_servo(self):
         """初始化视觉伺服控制器"""
-        if not self.camera or not self.comm or not self.detector:
-            logger.warning("✗ 视觉伺服需要相机、串口和检测器，跳过初始化")
+        detector_loaded = (
+            self.detector.is_loaded()
+            if self.detector and hasattr(self.detector, "is_loaded")
+            else False
+        )
+        if not self.camera or not self.comm or not self.detector or not detector_loaded:
+            logger.warning("✗ 视觉伺服需要相机、串口和已加载的检测器，跳过初始化")
             return
         
         from vision.visual_servo import VisualServoController, ServoConfig
@@ -333,7 +357,7 @@ class CameraControlSystem:
         
         self.web_server = WebServer(web_config)
         
-        # 注入依赖
+        # Web 路由会通过 comm_manager 直接下发运动与配置命令到 STM32。
         self.web_server.inject_dependencies(
             state_manager=self.state_manager,
             camera_controller=self.camera,

@@ -2,7 +2,7 @@
 # 
 # 环境变量可覆盖以下配置：
 #   CAMERA_ENABLED, CAMERA_WIDTH, CAMERA_HEIGHT
-#   COMM_PORT, COMM_BAUDRATE
+#   COMM_PORT, COMM_BAUDRATE, COMM_TRACE_PROTOCOL, COMM_TRACE_FRAMES_HEX, COMM_TRACE_HISTORY_SIZE
 #   WEB_PORT, WEB_HOST
 #   FACE_DB_PATH
 
@@ -49,6 +49,9 @@ comm:
   port: "/dev/ttyUSB0"     # Linux: /dev/ttyUSB0, Windows: COM3
   baudrate: 115200
   timeout: 1.0
+  trace_protocol: false    # 打印串口 TX/RX 调试日志（seq/cmd/axis/value/status）
+  trace_frames_hex: false  # 打印原始串口帧十六进制日志（AA ... 55）
+  trace_history_size: 200  # 内存中保留最近多少条串口诊断记录
 
 # 目标检测配置
 detection:

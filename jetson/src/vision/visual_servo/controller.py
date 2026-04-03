@@ -387,6 +387,7 @@ class VisualServoController(
         if rail != 0:
             commands.append((AxisType.RAIL, to_signed_steps(rail, 'rail')))
         
+        # 视觉伺服控制频率较高，这里按“尽力发送”模式工作，不等待 ACK。
         for axis, value in commands:
             cmd = Command(type=CommandType.SET_VELOCITY, axis=axis, value=value)
             self._comm.send_command(cmd, wait_response=False)
@@ -405,6 +406,7 @@ class VisualServoController(
         if rail is not None:
             commands.append((AxisType.RAIL, int(rail * 100)))  # mm -> 0.01 mm
         
+        # 多轴定位时仅等待最后一条响应，避免每个轴都阻塞串口往返。
         for idx, (axis, value) in enumerate(commands):
             cmd = Command(type=CommandType.MOVE_ABSOLUTE, axis=axis, value=value)
             self._comm.send_command(cmd, wait_response=(idx == len(commands) - 1))

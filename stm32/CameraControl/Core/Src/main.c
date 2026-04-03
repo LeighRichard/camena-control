@@ -34,7 +34,10 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef struct {
+  ConfigParamId id;
+  uint16_t raw_value;
+} ConfigCommand;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -50,20 +53,92 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* 上次运动更新时间 */
+/* Last time the motion loop was serviced. */
 static uint32_t last_motion_update = 0;
-#define MOTION_UPDATE_INTERVAL_MS  1  /* 1ms 更新周期 */
+#define MOTION_UPDATE_INTERVAL_MS  1  /* 1 ms control period */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+static ConfigCommand decode_config_command(const Command* cmd);
+static StatusCode handle_config_command(const Command* cmd);
 static void process_command(const Command* cmd);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static ConfigCommand decode_config_command(const Command* cmd)
+{
+  ConfigCommand decoded = {
+    .id = config_param_from_value(cmd->value),
+    .raw_value = config_raw_value(cmd->value)
+  };
 
+  return decoded;
+}
+
+static StatusCode handle_config_command(const Command* cmd)
+{
+  ConfigCommand config = decode_config_command(cmd);
+
+  switch (config.id) {
+    case CONFIG_MAX_VELOCITY:
+      motion_set_max_velocity((float)config.raw_value);
+      return STATUS_OK;
+
+    case CONFIG_MAX_ACCEL:
+      motion_set_max_accel((float)config.raw_value);
+      return STATUS_OK;
+
+    case CONFIG_PID_P:
+      motion_set_pid_p(cmd->axis, (float)config.raw_value / 100.0f);
+      return STATUS_OK;
+
+    case CONFIG_PID_I:
+      motion_set_pid_i(cmd->axis, (float)config.raw_value / 100.0f);
+      return STATUS_OK;
+
+    case CONFIG_PID_D:
+      motion_set_pid_d(cmd->axis, (float)config.raw_value / 100.0f);
+      return STATUS_OK;
+
+    case CONFIG_WATCHDOG_TIMEOUT_MS:
+      safety_set_watchdog_timeout((uint32_t)config.raw_value);
+      return STATUS_OK;
+
+    case CONFIG_WATCHDOG_ENABLE:
+      safety_watchdog_enable(config.raw_value != 0u);
+      return STATUS_OK;
+
+    case CONFIG_PAN_MIN_LIMIT:
+      motion_set_limit_min(AXIS_PAN, (int32_t)config_signed_value(cmd->value));
+      return STATUS_OK;
+
+    case CONFIG_PAN_MAX_LIMIT:
+      motion_set_limit_max(AXIS_PAN, (int32_t)config_signed_value(cmd->value));
+      return STATUS_OK;
+
+    case CONFIG_TILT_MIN_LIMIT:
+      motion_set_limit_min(AXIS_TILT, (int32_t)config_signed_value(cmd->value));
+      return STATUS_OK;
+
+    case CONFIG_TILT_MAX_LIMIT:
+      motion_set_limit_max(AXIS_TILT, (int32_t)config_signed_value(cmd->value));
+      return STATUS_OK;
+
+    case CONFIG_RAIL_MIN_LIMIT:
+      motion_set_limit_min(AXIS_RAIL, (int32_t)config.raw_value);
+      return STATUS_OK;
+
+    case CONFIG_RAIL_MAX_LIMIT:
+      motion_set_limit_max(AXIS_RAIL, (int32_t)config.raw_value);
+      return STATUS_OK;
+
+    default:
+      return STATUS_ERROR;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -103,17 +178,17 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  
-  /* 初始化业务模块 */
+
+  /* Initialize the motion, safety, and transport layers. */
   motion_init();
   safety_init();
   uart_comm_init();
-  
-  /* 使能电机驱动器 (低电平使能 TMC2209) */
+
+  /* TMC2209 enable pins are active low, so RESET enables the drivers. */
   HAL_GPIO_WritePin(PAN_EN_GPIO_Port, PAN_EN_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(TILT_EN_GPIO_Port, TILT_EN_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(RAIL_EN_GPIO_Port, RAIL_EN_Pin, GPIO_PIN_RESET);
-  
+
   last_motion_update = HAL_GetTick();
 
   /* USER CODE END 2 */
@@ -125,28 +200,28 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    
-    /* 处理 UART 接收到的指令 */
+
+    /* Process pending commands from Jetson. */
     uart_comm_process(process_command);
-    
-    /* 执行安全检查 */
+
+    /* Stop immediately if any safety interlock is active. */
     SafetyStatus safety_status = safety_check();
     if (safety_status == SAFETY_ESTOP || safety_status == SAFETY_LIMIT_HIT)
     {
       safety_emergency_stop();
     }
-    
-    /* 检查通信看门狗 */
+
+    /* Stop motion if communication has timed out. */
     safety_watchdog_check();
-    
-    /* 定时更新运动控制 (1ms) */
+
+    /* Maintain a 1 ms motion-control update period. */
     uint32_t current_time = HAL_GetTick();
     if (current_time - last_motion_update >= MOTION_UPDATE_INTERVAL_MS)
     {
       motion_update();
       last_motion_update = current_time;
     }
-    
+
   }
   /* USER CODE END 3 */
 }
@@ -199,18 +274,18 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /**
- * @brief 处理接收到的指令
+ * @brief Execute one parsed command and send a matching response.
  */
 static void process_command(const Command* cmd)
 {
   Response rsp = {0};
   rsp.seq = cmd->seq;
   rsp.status = STATUS_OK;
-  
-  /* 喂狗 */
+
+  /* Any valid command refreshes the communication watchdog. */
   safety_watchdog_feed();
-  
-  /* 检查安全状态 */
+
+  /* Reject motion commands while safety interlocks are active. */
   SafetyStatus safety_status = safety_check();
   if (safety_status == SAFETY_ESTOP)
   {
@@ -226,15 +301,15 @@ static void process_command(const Command* cmd)
     uart_comm_send_response(&rsp);
     return;
   }
-  
-  /* 处理指令 */
+
+  /* Execute command-specific behavior. */
   switch (cmd->type)
   {
     case CMD_POSITION:
       motion_move_to(cmd->axis, cmd->value);
       rsp.type = RSP_POSITION;
       break;
-      
+
     case CMD_STATUS:
       {
         Position pos = motion_get_current();
@@ -244,128 +319,51 @@ static void process_command(const Command* cmd)
         rsp.rail_pos = pos.rail_pos;
       }
       break;
-      
+
     case CMD_CONFIG:
-      {
-        /* 处理配置指令 */
-        rsp.type = RSP_CONFIG;
-        
-        /* 配置数据在 cmd->value 中编码
-         * 格式: 
-         *   - value 高16位: 配置参数ID
-         *   - value 低16位: 配置值
-         */
-        uint16_t config_id = (cmd->value >> 16) & 0xFFFF;
-        uint16_t config_value = cmd->value & 0xFFFF;
-        
-        switch (config_id) {
-          case 0x0001:  /* 设置最大速度 */
-            motion_set_max_velocity((float)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0002:  /* 设置最大加速度 */
-            motion_set_max_accel((float)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0003:  /* 设置PID参数P */
-            motion_set_pid_p(cmd->axis, (float)config_value / 100.0f);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0004:  /* 设置PID参数I */
-            motion_set_pid_i(cmd->axis, (float)config_value / 100.0f);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0005:  /* 设置PID参数D */
-            motion_set_pid_d(cmd->axis, (float)config_value / 100.0f);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0010:  /* 设置看门狗超时 (ms) */
-            safety_set_watchdog_timeout((uint32_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0011:  /* 启用/禁用看门狗 */
-            safety_watchdog_enable(config_value != 0);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0020:  /* 设置位置限位 - Pan最小值 */
-            motion_set_limit_min(AXIS_PAN, (int32_t)(int16_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0021:  /* 设置位置限位 - Pan最大值 */
-            motion_set_limit_max(AXIS_PAN, (int32_t)(int16_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0022:  /* 设置位置限位 - Tilt最小值 */
-            motion_set_limit_min(AXIS_TILT, (int32_t)(int16_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0023:  /* 设置位置限位 - Tilt最大值 */
-            motion_set_limit_max(AXIS_TILT, (int32_t)(int16_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0024:  /* 设置位置限位 - Rail最小值 */
-            motion_set_limit_min(AXIS_RAIL, (int32_t)(int16_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          case 0x0025:  /* 设置位置限位 - Rail最大值 */
-            motion_set_limit_max(AXIS_RAIL, (int32_t)(int16_t)config_value);
-            rsp.status = STATUS_OK;
-            break;
-            
-          default:
-            rsp.status = STATUS_ERROR;
-            break;
-        }
-      }
+      rsp.type = RSP_CONFIG;
+      rsp.status = handle_config_command(cmd);
       break;
-      
+
     case CMD_ESTOP:
       safety_emergency_stop();
       rsp.type = RSP_ESTOP;
       rsp.status = STATUS_ESTOP;
       break;
-      
+
     case CMD_HOME:
       motion_home(cmd->axis);
       rsp.type = RSP_HOME;
       break;
-      
+
     case CMD_SET_VELOCITY:
-      /* 设置目标速度 (value 为速度值，单位：步/秒) */
+      /* Velocity commands use signed steps per second. */
       motion_set_velocity(cmd->axis, (float)cmd->value);
       rsp.type = RSP_SET_VELOCITY;
       break;
-      
+
     case CMD_STOP:
-      /* 停止所有轴的运动 */
-      motion_stop_all();
+      /* STOP supports either one axis or all axes. */
+      if (cmd->axis == AXIS_ALL) {
+        motion_stop_all();
+      } else {
+        motion_stop_axis(cmd->axis);
+      }
       rsp.type = RSP_STOP;
       break;
-      
+
     case CMD_MOVE_ABSOLUTE:
-      /* 绝对位置移动 */
+      /* Positions use 0.01 degree / 0.01 mm units. */
       motion_move_to(cmd->axis, cmd->value);
       rsp.type = RSP_MOVE_ABSOLUTE;
       break;
-      
+
     default:
       rsp.status = STATUS_ERROR;
       rsp.type = (ResponseType)(cmd->type | 0x80);
       break;
   }
-  
+
   uart_comm_send_response(&rsp);
 }
 

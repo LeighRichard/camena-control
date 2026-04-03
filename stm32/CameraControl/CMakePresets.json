@@ -31,8 +31,22 @@
             "configurePreset": "Debug"
         },
         {
+            "name": "Debug-Flash",
+            "configurePreset": "Debug",
+            "targets": [
+                "flash"
+            ]
+        },
+        {
             "name": "Release",
             "configurePreset": "Release"
+        },
+        {
+            "name": "Release-Flash",
+            "configurePreset": "Release",
+            "targets": [
+                "flash"
+            ]
         }
     ]
 }
