@@ -15,7 +15,35 @@ import sys
 import time
 import logging
 import os
+import io
+import ctypes
 from pathlib import Path
+
+# Preload libgomp globally to mitigate Jetson static TLS issues before cv2 loads.
+try:
+    ctypes.CDLL("/usr/lib/aarch64-linux-gnu/libgomp.so.1", mode=ctypes.RTLD_GLOBAL)
+except Exception:
+    pass
+
+# Preload heavy native modules early to avoid libgomp static TLS conflicts at runtime.
+try:
+    import cv2
+    _CV2_IMPORT_ERROR = None
+except Exception as e:
+    cv2 = None
+    _CV2_IMPORT_ERROR = str(e)
+
+try:
+    import numpy as np
+    _NP_IMPORT_ERROR = None
+except Exception as e:
+    np = None
+    _NP_IMPORT_ERROR = str(e)
+
+try:
+    from PIL import Image
+except Exception:
+    Image = None
 redist_path = os.getenv('OPENNI2_REDIST', '/home/richard/OpenNI-Linux-Arm64-2.3/Redist')
 os.environ['OPENNI2_REDIST'] = redist_path
 current_ld_path = os.getenv('LD_LIBRARY_PATH', '')
@@ -52,6 +80,7 @@ class CameraControlSystem:
         self.alert_manager = None
         self._cv2_cap = None
         self._cv2_failed = False
+        self._capture_import_warned = False
     
     def initialize(self):
         """初始化所有组件"""
@@ -181,9 +210,22 @@ class CameraControlSystem:
             return
         
         # 初始化相机
-        success, error = self.camera.initialize()
+        current_status = ""
+        try:
+            current_status = str(self.camera.get_status() or "").lower()
+        except Exception:
+            current_status = ""
+
+        if current_status in ("ready", "capturing"):
+            success, error = True, ""
+            logger.info("Camera controller already initialized by factory, skipping duplicate initialize.")
+        else:
+            success, error = self.camera.initialize()
         
         if success:
+            if not self._probe_camera_stream():
+                warn_msg = "camera initialized but no depth frames received in warmup probe"
+                logger.warning(f"Camera warmup probe failed: {warn_msg}")
             logger.info(f"✓ 相机已启动: {self.camera.camera_type} - {self.camera.camera_model}")
             logger.info(f"  分辨率: {cam_config.width}x{cam_config.height}@{cam_config.fps}fps")
         else:
@@ -194,6 +236,21 @@ class CameraControlSystem:
             else:
                 raise RuntimeError(f"相机启动失败: {error}")
     
+    def _probe_camera_stream(self) -> bool:
+        """Quick warmup probe to verify depth frames are available."""
+        if not self.camera:
+            return False
+
+        for _ in range(5):
+            try:
+                image_pair, _ = self.camera.capture(wait_frames=1)
+                if image_pair is not None and getattr(image_pair, "depth", None) is not None:
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.05)
+        return False
+
     def _init_comm(self):
         """初始化串口通信"""
         from comm.manager import CommManager, CommConfig
@@ -419,30 +476,29 @@ class CameraControlSystem:
         if not self.camera:
             return None
         return self._capture_frame_mixed()
-        
-        try:
-            import cv2
-            image_pair, _ = self.camera.capture(wait_frames=1)
-            if image_pair is None:
-                return None
-            
-            # 转换为 JPEG
-            _, jpeg = cv2.imencode(
-                '.jpg', 
-                cv2.cvtColor(image_pair.rgb, cv2.COLOR_RGB2BGR),
-                [cv2.IMWRITE_JPEG_QUALITY, 80]
-            )
-            return jpeg.tobytes()
-        except Exception:
-            return None
-    
+
     def _capture_frame_mixed(self):
         if not self.camera:
             return None
 
         try:
-            import cv2
-            import numpy as np
+            if np is None:
+                if not self._capture_import_warned:
+                    logger.error(f"NumPy import failed in capture path: {_NP_IMPORT_ERROR}")
+                    self._capture_import_warned = True
+                return None
+
+            # If OpenCV is unavailable (e.g. libgomp static TLS issue), keep stream alive
+            # with depth-only JPEG frames encoded by Pillow.
+            if cv2 is None:
+                if not self._capture_import_warned:
+                    logger.error(
+                        "OpenCV import failed in capture path: %s. "
+                        "Hint: export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1",
+                        _CV2_IMPORT_ERROR,
+                    )
+                    self._capture_import_warned = True
+                return self._capture_frame_depth_only_fallback()
 
             if self._cv2_cap is None and not self._cv2_failed:
                 logger.info("Searching UVC color camera for mixed stream...")
@@ -517,6 +573,35 @@ class CameraControlSystem:
             if not hasattr(self, "_capture_error_logged"):
                 logger.error(f"Mixed capture failed (logged once): {e}")
                 self._capture_error_logged = True
+            return None
+
+    def _capture_frame_depth_only_fallback(self):
+        """Depth-only JPEG fallback when OpenCV fails to load."""
+        if np is None or Image is None:
+            return None
+
+        try:
+            image_pair, _ = self.camera.capture(wait_frames=1)
+            depth_img = image_pair.depth if image_pair is not None else None
+
+            if depth_img is None:
+                rgb = np.zeros((480, 640, 3), dtype=np.uint8)
+            else:
+                depth = depth_img.astype(np.float32)
+                max_val = float(depth.max()) if depth.size else 0.0
+                if max_val > 0:
+                    depth8 = (depth / max_val * 255.0).astype(np.uint8)
+                else:
+                    depth8 = np.zeros_like(depth, dtype=np.uint8)
+                rgb = np.stack([depth8, depth8, depth8], axis=-1)
+
+            with io.BytesIO() as buf:
+                Image.fromarray(rgb, mode="RGB").save(buf, format="JPEG", quality=75)
+                return buf.getvalue()
+        except Exception as e:
+            if not hasattr(self, "_capture_fallback_error_logged"):
+                logger.error(f"Depth-only fallback capture failed (logged once): {e}")
+                self._capture_fallback_error_logged = True
             return None
 
     def stop(self):

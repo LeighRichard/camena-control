@@ -94,9 +94,20 @@ class OrbbecControllerOpenNI2Python(BaseCameraController):
         return True, redist_path
 
     def initialize(self) -> Tuple[bool, str]:
+        if (
+            self._status in (CameraStatus.READY, CameraStatus.CAPTURING)
+            and self._device is not None
+            and self._depth_stream is not None
+            and self._openni2 is not None
+        ):
+            return True, ""
+
         self._status = CameraStatus.INITIALIZING
 
         try:
+            if self._device is not None or self._depth_stream is not None or self._openni2 is not None:
+                self.close()
+
             ok, redist_path = self._setup_openni2_env()
             if not ok:
                 self._status = CameraStatus.ERROR
@@ -111,6 +122,9 @@ class OrbbecControllerOpenNI2Python(BaseCameraController):
                 openni2.initialize(redist_path)
             except TypeError:
                 openni2.initialize()
+            except Exception as init_error:
+                if "already initialized" not in str(init_error).lower():
+                    raise
 
             self._device = openni2.Device.open_any()
             if not self._device:
