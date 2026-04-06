@@ -1081,6 +1081,8 @@ def create_app(config: Optional[WebConfig] = None):
         if not name:
             return jsonify({"error": "缺少人名参数"}), 400
         
+        logger.info(f"收到人脸注册请求: name={name}")
+        
         # 检查是否上传了图片
         if 'image' in request.files:
             file = request.files['image']
@@ -1097,9 +1099,36 @@ def create_app(config: Optional[WebConfig] = None):
             except Exception as e:
                 return jsonify({"error": f"图片处理失败: {str(e)}"}), 400
         
-        # 使用当前相机画面
+        # 优先使用视频流最新帧，避免和视频采集线程争用底层相机资源导致请求卡住
+        latest_frame = None
+        try:
+            with app.frame_lock:
+                latest_frame = app.latest_frame
+        except Exception:
+            latest_frame = None
+
+        if latest_frame:
+            try:
+                import numpy as np
+                from PIL import Image
+                import io
+
+                image = Image.open(io.BytesIO(latest_frame)).convert('RGB')
+                image_array = np.array(image)
+
+                # 混合预览可能是「左彩色 + 右深度伪彩」，注册仅使用左半边彩色图
+                h, w = image_array.shape[:2]
+                if w >= h * 2:
+                    image_array = image_array[:, : w // 2, :]
+
+                success, message = app.face_recognizer.register_face(name, image_array)
+                return jsonify({"success": success, "message": message})
+            except Exception as e:
+                logger.warning(f"使用最新视频帧注册失败，回退到相机直采: {e}")
+
+        # 回退：直接使用当前相机画面
         if app.camera_controller:
-            image_pair, error = app.camera_controller.capture(wait_frames=1)
+            image_pair, error = app.camera_controller.capture(wait_frames=0)
             if image_pair:
                 success, message = app.face_recognizer.register_face(name, image_pair.rgb)
                 return jsonify({"success": success, "message": message})

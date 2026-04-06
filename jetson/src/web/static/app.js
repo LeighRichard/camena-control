@@ -43,6 +43,11 @@ const elements = {
 
 // 日志
 function log(message) {
+    if (!elements.logPanel) {
+        console.log(message);
+        return;
+    }
+
     const time = new Date().toLocaleTimeString();
     const entry = document.createElement('div');
     entry.className = 'log-entry';
@@ -57,8 +62,12 @@ function log(message) {
 
 // API 请求
 async function api(endpoint, method = 'GET', data = null) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     const options = {
         method,
+        signal: controller.signal,
         headers: {
             'Content-Type': 'application/json'
         }
@@ -78,8 +87,14 @@ async function api(endpoint, method = 'GET', data = null) {
         
         return result;
     } catch (error) {
+        if (error && error.name === 'AbortError') {
+            log('❌ 请求超时，请检查相机/后端状态');
+            throw new Error('请求超时，请检查相机/后端状态');
+        }
         log(`❌ ${error.message}`);
         throw error;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
@@ -556,7 +571,7 @@ async function registerFace() {
             log(`❌ ${result.message}`);
         }
     } catch (error) {
-        // 错误已记录
+        log(`❌ 注册失败: ${error.message || error}`);
     }
 }
 
