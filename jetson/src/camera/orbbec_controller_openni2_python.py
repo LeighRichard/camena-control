@@ -10,6 +10,7 @@ from enum import Enum
 import logging
 import os
 import time
+import threading
 
 import numpy as np
 
@@ -50,6 +51,7 @@ class OrbbecControllerOpenNI2Python(BaseCameraController):
         self._openni2 = None
         self._device = None
         self._depth_stream = None
+        self._capture_lock = threading.Lock()
 
         self._depth_processor = DepthProcessor(
             color_size=(self.DEFAULT_COLOR_WIDTH, self.DEFAULT_COLOR_HEIGHT),
@@ -175,19 +177,22 @@ class OrbbecControllerOpenNI2Python(BaseCameraController):
 
         self._status = CameraStatus.CAPTURING
         try:
-            for _ in range(wait_frames):
-                if self._depth_stream:
-                    self._depth_stream.read_frame()
+            # OpenNI2 depth stream read is not thread-safe.
+            # Web preview loop and API requests may capture concurrently.
+            with self._capture_lock:
+                for _ in range(wait_frames):
+                    if self._depth_stream:
+                        self._depth_stream.read_frame()
 
-            if not self._depth_stream:
-                self._status = CameraStatus.READY
-                return None, "depth stream is not available"
+                if not self._depth_stream:
+                    self._status = CameraStatus.READY
+                    return None, "depth stream is not available"
 
-            depth_frame = self._depth_stream.read_frame()
-            depth_data = depth_frame.get_buffer_as_uint16()
-            depth_image = np.frombuffer(depth_data, dtype=np.uint16).reshape(
-                (depth_frame.height, depth_frame.width)
-            ).copy()
+                depth_frame = self._depth_stream.read_frame()
+                depth_data = depth_frame.get_buffer_as_uint16()
+                depth_image = np.frombuffer(depth_data, dtype=np.uint16).reshape(
+                    (depth_frame.height, depth_frame.width)
+                ).copy()
 
             h, w = depth_image.shape
             dummy_rgb = np.zeros((h, w, 3), dtype=np.uint8)

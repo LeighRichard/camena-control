@@ -1099,7 +1099,7 @@ def create_app(config: Optional[WebConfig] = None):
         
         # 使用当前相机画面
         if app.camera_controller:
-            image_pair, error = app.camera_controller.capture(wait_frames=3)
+            image_pair, error = app.camera_controller.capture(wait_frames=1)
             if image_pair:
                 success, message = app.face_recognizer.register_face(name, image_pair.rgb)
                 return jsonify({"success": success, "message": message})
