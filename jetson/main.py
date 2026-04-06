@@ -422,7 +422,7 @@ class CameraControlSystem:
         
         try:
             import cv2
-            image_pair, _ = self.camera.capture(wait_frames=0)
+            image_pair, _ = self.camera.capture(wait_frames=1)
             if image_pair is None:
                 return None
             
@@ -468,14 +468,14 @@ class CameraControlSystem:
                 if ret and frame is not None:
                     color_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            image_pair, _ = self.camera.capture(wait_frames=0)
+            image_pair, _ = self.camera.capture(wait_frames=1)
             depth_img = image_pair.depth if image_pair is not None else None
 
             if image_pair is not None and color_img is not None:
                 image_pair.rgb = color_img
 
             output_img = None
-            if color_img is not None and depth_img is not None and np.max(depth_img) > 0:
+            if color_img is not None and depth_img is not None:
                 color_bgr = cv2.cvtColor(color_img, cv2.COLOR_RGB2BGR)
                 depth_norm = cv2.normalize(depth_img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
                 depth_color = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
@@ -486,7 +486,7 @@ class CameraControlSystem:
                 output_img = np.hstack((color_bgr, depth_color))
             elif color_img is not None:
                 output_img = cv2.cvtColor(color_img, cv2.COLOR_RGB2BGR)
-            elif depth_img is not None and np.max(depth_img) > 0:
+            elif depth_img is not None:
                 depth_norm = cv2.normalize(depth_img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
                 output_img = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
                 cv2.putText(
@@ -500,7 +500,16 @@ class CameraControlSystem:
                 )
 
             if output_img is None:
-                return None
+                output_img = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(
+                    output_img,
+                    "WAITING FOR CAMERA FRAMES",
+                    (20, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0, 255, 255),
+                    2,
+                )
 
             success, jpeg = cv2.imencode(".jpg", output_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
             return jpeg.tobytes() if success else None
