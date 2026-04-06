@@ -14,7 +14,13 @@ import signal
 import sys
 import time
 import logging
+import os
 from pathlib import Path
+redist_path = os.getenv('OPENNI2_REDIST', '/home/richard/OpenNI-Linux-Arm64-2.3/Redist')
+os.environ['OPENNI2_REDIST'] = redist_path
+current_ld_path = os.getenv('LD_LIBRARY_PATH', '')
+if redist_path and redist_path not in current_ld_path:
+    os.environ['LD_LIBRARY_PATH'] = f"{redist_path}:{current_ld_path}".strip(':')
 
 # 添加 src 到路径
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -44,6 +50,8 @@ class CameraControlSystem:
         self.web_server = None
         self.system_monitor = None
         self.alert_manager = None
+        self._cv2_cap = None
+        self._cv2_failed = False
     
     def initialize(self):
         """初始化所有组件"""
@@ -410,10 +418,11 @@ class CameraControlSystem:
         """采集视频帧（用于 Web 流）"""
         if not self.camera:
             return None
+        return self._capture_frame_mixed()
         
         try:
             import cv2
-            image_pair, _ = self.camera.capture(wait_frames=1)
+            image_pair, _ = self.camera.capture(wait_frames=0)
             if image_pair is None:
                 return None
             
@@ -427,6 +436,80 @@ class CameraControlSystem:
         except Exception:
             return None
     
+    def _capture_frame_mixed(self):
+        if not self.camera:
+            return None
+
+        try:
+            import cv2
+            import numpy as np
+
+            if self._cv2_cap is None and not self._cv2_failed:
+                logger.info("Searching UVC color camera for mixed stream...")
+                for index in range(5):
+                    cap = cv2.VideoCapture(index)
+                    if cap.isOpened():
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                            self._cv2_cap = cap
+                            logger.info(f"UVC color stream attached at /dev/video{index}")
+                            break
+                    cap.release()
+
+                if self._cv2_cap is None:
+                    self._cv2_failed = True
+                    logger.warning("No UVC color stream available, fallback to depth-only preview.")
+
+            color_img = None
+            if self._cv2_cap is not None and self._cv2_cap.isOpened():
+                ret, frame = self._cv2_cap.read()
+                if ret and frame is not None:
+                    color_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            image_pair, _ = self.camera.capture(wait_frames=0)
+            depth_img = image_pair.depth if image_pair is not None else None
+
+            if image_pair is not None and color_img is not None:
+                image_pair.rgb = color_img
+
+            output_img = None
+            if color_img is not None and depth_img is not None and np.max(depth_img) > 0:
+                color_bgr = cv2.cvtColor(color_img, cv2.COLOR_RGB2BGR)
+                depth_norm = cv2.normalize(depth_img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                depth_color = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
+                h1 = color_bgr.shape[0]
+                h2, w2 = depth_color.shape[:2]
+                if h1 != h2:
+                    depth_color = cv2.resize(depth_color, (int(w2 * (h1 / h2)), h1))
+                output_img = np.hstack((color_bgr, depth_color))
+            elif color_img is not None:
+                output_img = cv2.cvtColor(color_img, cv2.COLOR_RGB2BGR)
+            elif depth_img is not None and np.max(depth_img) > 0:
+                depth_norm = cv2.normalize(depth_img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                output_img = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
+                cv2.putText(
+                    output_img,
+                    "COLOR DOWN, DEPTH ONLY",
+                    (20, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0,
+                    (0, 0, 255),
+                    2,
+                )
+
+            if output_img is None:
+                return None
+
+            success, jpeg = cv2.imencode(".jpg", output_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            return jpeg.tobytes() if success else None
+        except Exception as e:
+            if not hasattr(self, "_capture_error_logged"):
+                logger.error(f"Mixed capture failed (logged once): {e}")
+                self._capture_error_logged = True
+            return None
+
     def stop(self):
         """停止系统"""
         logger.info("正在停止系统...")
@@ -451,6 +534,9 @@ class CameraControlSystem:
         # 停止相机
         if self.camera:
             self.camera.close()
+        if self._cv2_cap:
+            self._cv2_cap.release()
+            self._cv2_cap = None
         
         # 断开串口
         if self.comm:

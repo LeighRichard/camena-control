@@ -98,6 +98,7 @@ class CameraFactory:
         def try_create_controller(module_name: str, class_name: str, backend_name: str) -> Optional[BaseCameraController]:
             """尝试创建指定后端的控制器"""
             controller = None
+            success = False
             try:
                 # 使用 importlib 动态导入模块
                 import importlib
@@ -122,7 +123,7 @@ class CameraFactory:
                 return None
             finally:
                 # 确保失败时清理资源
-                if controller is not None:
+                if controller is not None and not success:
                     try:
                         controller.close()
                     except Exception:
@@ -131,17 +132,21 @@ class CameraFactory:
         # 按优先级尝试不同的后端
         # 注意：只尝试一个 ROS 后端，避免冲突
         backends = [
+            ('orbbec_controller_openni2_python', 'OrbbecControllerOpenNI2Python', 'OpenNI2 Python'),
             ('orbbec_controller_ros_openni2', 'OrbbecControllerROSOpenNI2', 'ROS OpenNI2 (深度+彩色)'),
             ('orbbec_controller_libuvc', 'OrbbecControllerLibUVC', 'libuvc (仅彩色)'),
             ('orbbec_controller', 'OrbbecController', 'pyorbbecsdk'),
         ]
         
-        for module_name, class_name, backend_name in backends:
+        for module_name, class_name, backend_name in [
+            ('orbbec_controller_openni2_python', 'OrbbecControllerOpenNI2Python', 'OpenNI2 Python'),
+        ]:
             logger.info(f"尝试使用 {backend_name} 后端...")
             controller = try_create_controller(module_name, class_name, backend_name)
             if controller is not None:
                 return controller
 
+        logger.error("OpenNI2 Python backend initialization failed.")
         return None
 
     @staticmethod
