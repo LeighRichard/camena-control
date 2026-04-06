@@ -67,7 +67,7 @@ face_recognition:
   database_path: "face_database"
   detection_threshold: 0.5
   recognition_threshold: 0.6
-  backend: "auto"          # auto, insightface, face_recognition
+  backend: "face_recognition"  # auto, insightface, face_recognition
 
 # 视觉伺服配置
 visual_servo:
