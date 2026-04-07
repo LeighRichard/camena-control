@@ -109,7 +109,9 @@ void safety_emergency_stop(void)
     motion_stop();
 
     /* TMC2209 enable pins are active low, so high disables outputs. */
-    GPIOB->BSRR = PAN_EN_Pin | TILT_EN_Pin | RAIL_EN_Pin;
+    HAL_GPIO_WritePin(PAN_EN_GPIO_Port, PAN_EN_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(TILT_EN_GPIO_Port, TILT_EN_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(RAIL_EN_GPIO_Port, RAIL_EN_Pin, GPIO_PIN_SET);
 }
 
 void safety_reset(void)

@@ -83,12 +83,12 @@ void Error_Handler(void);
 #define ESTOP_GPIO_Port GPIOC
 #define PAN_STEP_Pin GPIO_PIN_8
 #define PAN_STEP_GPIO_Port GPIOA
-#define TILT_EN_Pin GPIO_PIN_3
-#define TILT_EN_GPIO_Port GPIOB
-#define RAIL_DIR_Pin GPIO_PIN_4
-#define RAIL_DIR_GPIO_Port GPIOB
-#define RAIL_EN_Pin GPIO_PIN_5
-#define RAIL_EN_GPIO_Port GPIOB
+#define TILT_EN_Pin GPIO_PIN_2
+#define TILT_EN_GPIO_Port GPIOD
+#define RAIL_DIR_Pin GPIO_PIN_3
+#define RAIL_DIR_GPIO_Port GPIOD
+#define RAIL_EN_Pin GPIO_PIN_4
+#define RAIL_EN_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
 
