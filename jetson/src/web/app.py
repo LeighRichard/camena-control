@@ -252,6 +252,10 @@ def create_app(config: Optional[WebConfig] = None):
     app.video_quality = config.video_quality
     app.latest_frame = None
     app.frame_lock = threading.Lock()
+    app.face_detect_cache = None
+    app.face_detect_cache_time = 0.0
+    app.face_detect_cache_interval = 1.2
+    app.face_detect_lock = threading.Lock()
 
     def _get_face_image_from_latest_frame():
         """
@@ -1192,6 +1196,16 @@ def create_app(config: Optional[WebConfig] = None):
         if not app.face_recognizer:
             return jsonify({"error": "人脸识别器未初始化"}), 500
 
+        force_refresh = request.args.get("force", "").lower() in ("1", "true", "yes")
+
+        if not force_refresh:
+            with app.face_detect_lock:
+                if (
+                    app.face_detect_cache is not None
+                    and (time.time() - app.face_detect_cache_time) < app.face_detect_cache_interval
+                ):
+                    return jsonify(app.face_detect_cache)
+
         rgb_image, depth_image, frame_meta = _get_face_image_from_latest_frame()
         if rgb_image is None:
             if not app.camera_controller:
@@ -1217,14 +1231,19 @@ def create_app(config: Optional[WebConfig] = None):
             }
 
         result = app.face_recognizer.detect_and_recognize(rgb_image, depth_image)
-
-        return jsonify({
+        payload = {
             "face_count": result.face_count,
             "detection_time_ms": round(result.detection_time, 1),
             "recognition_time_ms": round(result.recognition_time, 1),
             "faces": [f.to_dict() for f in result.faces],
             **frame_meta,
-        })
+        }
+
+        with app.face_detect_lock:
+            app.face_detect_cache = payload
+            app.face_detect_cache_time = time.time()
+
+        return jsonify(payload)
     
     @app.route("/api/face/tracking/start", methods=["POST"])
     @require_auth(Permission.CONTROL_POSITION if app.auth_manager else None)

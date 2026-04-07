@@ -588,6 +588,13 @@ async function setMode(mode) {
         
         const modeNames = { auto: '自动', manual: '手动', face: '人脸跟踪' };
         log(`🎯 切换到${modeNames[mode] || mode}模式`);
+
+        if (mode === 'face') {
+            updateFaceOverlay();
+        } else {
+            faceOverlayState.faces = [];
+            drawFaceOverlay();
+        }
     } catch (error) {
         // 错误已在 api 函数中记录
     }
@@ -634,10 +641,10 @@ pollStatus();
 refreshCommDiagnostics();
 loadRegisteredFaces();
 updateFaceOverlay();
-setInterval(pollStatus, 1000);
-setInterval(refreshCommDiagnostics, 2000);
-setInterval(updateFaceTrackingStatus, 500);
-setInterval(updateFaceOverlay, 1200);
+setInterval(pollStatus, 1500);
+setInterval(refreshCommDiagnostics, 5000);
+setInterval(updateFaceTrackingStatus, 1200);
+setInterval(updateFaceOverlay, 2500);
 
 window.addEventListener('resize', drawFaceOverlay);
 elements.videoStream?.addEventListener('load', drawFaceOverlay);
@@ -646,6 +653,15 @@ elements.videoStream?.addEventListener('load', drawFaceOverlay);
 
 async function updateFaceOverlay() {
     if (document.hidden || isFaceOverlayUpdating) {
+        return;
+    }
+
+    // 仅在人脸模式下更新叠加框，降低 CPU 占用与接口压力。
+    if (currentMode !== 'face') {
+        if (faceOverlayState.faces.length) {
+            faceOverlayState.faces = [];
+            drawFaceOverlay();
+        }
         return;
     }
 

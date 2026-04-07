@@ -417,7 +417,10 @@ class CameraControlSystem:
         web_config = WebConfig(
             host=self.config.web.host,
             port=self.config.web.port,
-            enable_auth=self.config.web.enable_auth
+            enable_auth=self.config.web.enable_auth,
+            video_fps=self.config.web.video_fps,
+            video_quality=self.config.web.video_quality,
+            enable_adaptive_streaming=False,
         )
         
         self.web_server = WebServer(web_config)
@@ -524,7 +527,7 @@ class CameraControlSystem:
                 if ret and frame is not None:
                     color_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            image_pair, _ = self.camera.capture(wait_frames=1)
+            image_pair, _ = self.camera.capture(wait_frames=0)
             depth_img = image_pair.depth if image_pair is not None else None
 
             if image_pair is not None and color_img is not None:
@@ -567,7 +570,13 @@ class CameraControlSystem:
                     2,
                 )
 
-            success, jpeg = cv2.imencode(".jpg", output_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            jpeg_quality = int(getattr(self.config.web, "video_quality", 60))
+            jpeg_quality = max(35, min(80, jpeg_quality))
+            success, jpeg = cv2.imencode(
+                ".jpg",
+                output_img,
+                [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality],
+            )
             return jpeg.tobytes() if success else None
         except Exception as e:
             if not hasattr(self, "_capture_error_logged"):
