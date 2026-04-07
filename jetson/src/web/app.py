@@ -253,6 +253,56 @@ def create_app(config: Optional[WebConfig] = None):
     app.latest_frame = None
     app.frame_lock = threading.Lock()
 
+    def _get_face_image_from_latest_frame():
+        """
+        从当前 Web 视频帧中提取彩色图像。
+
+        混合预览模式下，视频为「左侧彩色 + 右侧深度伪彩」，
+        这里仅返回左半边彩色图，并附带其在整帧中的坐标区域，
+        方便前端将人脸框正确叠加到 MJPEG 预览上。
+        """
+        latest_frame = None
+        try:
+            with app.frame_lock:
+                latest_frame = app.latest_frame
+        except Exception:
+            latest_frame = None
+
+        if not latest_frame:
+            return None, None, None
+
+        try:
+            import io
+            import numpy as np
+            from PIL import Image
+
+            image = Image.open(io.BytesIO(latest_frame)).convert('RGB')
+            full_image = np.array(image)
+            frame_height, frame_width = full_image.shape[:2]
+
+            overlay_region = {
+                "x": 0,
+                "y": 0,
+                "width": frame_width,
+                "height": frame_height,
+            }
+            face_image = full_image
+
+            if frame_width >= frame_height * 2:
+                overlay_region["width"] = frame_width // 2
+                face_image = full_image[:, : overlay_region["width"], :]
+
+            frame_meta = {
+                "frame_width": frame_width,
+                "frame_height": frame_height,
+                "overlay_region": overlay_region,
+                "source": "latest_frame",
+            }
+            return face_image, None, frame_meta
+        except Exception as e:
+            logger.warning(f"解析最新视频帧失败: {e}")
+            return None, None, None
+
     def _get_detector_runtime_status():
         detector = app.object_detector
         if not detector:
@@ -1100,28 +1150,10 @@ def create_app(config: Optional[WebConfig] = None):
                 return jsonify({"error": f"图片处理失败: {str(e)}"}), 400
         
         # 优先使用视频流最新帧，避免和视频采集线程争用底层相机资源导致请求卡住
-        latest_frame = None
-        try:
-            with app.frame_lock:
-                latest_frame = app.latest_frame
-        except Exception:
-            latest_frame = None
-
-        if latest_frame:
+        latest_rgb, _, _ = _get_face_image_from_latest_frame()
+        if latest_rgb is not None:
             try:
-                import numpy as np
-                from PIL import Image
-                import io
-
-                image = Image.open(io.BytesIO(latest_frame)).convert('RGB')
-                image_array = np.array(image)
-
-                # 混合预览可能是「左彩色 + 右深度伪彩」，注册仅使用左半边彩色图
-                h, w = image_array.shape[:2]
-                if w >= h * 2:
-                    image_array = image_array[:, : w // 2, :]
-
-                success, message = app.face_recognizer.register_face(name, image_array)
+                success, message = app.face_recognizer.register_face(name, latest_rgb)
                 return jsonify({"success": success, "message": message})
             except Exception as e:
                 logger.warning(f"使用最新视频帧注册失败，回退到相机直采: {e}")
@@ -1159,21 +1191,39 @@ def create_app(config: Optional[WebConfig] = None):
         """检测当前画面中的人脸"""
         if not app.face_recognizer:
             return jsonify({"error": "人脸识别器未初始化"}), 500
-        
-        if not app.camera_controller:
-            return jsonify({"error": "相机未初始化"}), 500
-        
-        image_pair, error = app.camera_controller.capture(wait_frames=1)
-        if not image_pair:
-            return jsonify({"error": f"相机拍摄失败: {error}"}), 500
-        
-        result = app.face_recognizer.detect_and_recognize(image_pair.rgb, image_pair.depth)
-        
+
+        rgb_image, depth_image, frame_meta = _get_face_image_from_latest_frame()
+        if rgb_image is None:
+            if not app.camera_controller:
+                return jsonify({"error": "相机未初始化"}), 500
+
+            image_pair, error = app.camera_controller.capture(wait_frames=0)
+            if not image_pair:
+                return jsonify({"error": f"相机拍摄失败: {error}"}), 500
+
+            rgb_image = image_pair.rgb
+            depth_image = image_pair.depth
+            height, width = rgb_image.shape[:2]
+            frame_meta = {
+                "frame_width": width,
+                "frame_height": height,
+                "overlay_region": {
+                    "x": 0,
+                    "y": 0,
+                    "width": width,
+                    "height": height,
+                },
+                "source": "camera_capture",
+            }
+
+        result = app.face_recognizer.detect_and_recognize(rgb_image, depth_image)
+
         return jsonify({
             "face_count": result.face_count,
             "detection_time_ms": round(result.detection_time, 1),
             "recognition_time_ms": round(result.recognition_time, 1),
-            "faces": [f.to_dict() for f in result.faces]
+            "faces": [f.to_dict() for f in result.faces],
+            **frame_meta,
         })
     
     @app.route("/api/face/tracking/start", methods=["POST"])

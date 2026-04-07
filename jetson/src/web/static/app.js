@@ -11,11 +11,14 @@ let isAutoCapturing = false;
 let targets = [];
 let selectedTargetId = null;
 let currentCommTraceSource = '';
+let isFaceOverlayUpdating = false;
 
 // DOM 元素
 const elements = {
     connectionStatus: document.getElementById('connectionStatus'),
+    videoContainer: document.getElementById('videoContainer'),
     videoStream: document.getElementById('videoStream'),
+    videoOverlayCanvas: document.getElementById('videoOverlayCanvas'),
     videoFps: document.getElementById('videoFps'),
     videoResolution: document.getElementById('videoResolution'),
     panPosition: document.getElementById('panPosition'),
@@ -41,6 +44,13 @@ const elements = {
     currentFaceName: document.getElementById('currentFaceName')
 };
 
+const faceOverlayState = {
+    faces: [],
+    frameWidth: 0,
+    frameHeight: 0,
+    overlayRegion: null
+};
+
 // 日志
 function log(message) {
     if (!elements.logPanel) {
@@ -58,6 +68,114 @@ function log(message) {
     while (elements.logPanel.children.length > 50) {
         elements.logPanel.removeChild(elements.logPanel.lastChild);
     }
+}
+
+function clearFaceOverlay() {
+    const canvas = elements.videoOverlayCanvas;
+    if (!canvas) {
+        return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function resizeFaceOverlayCanvas() {
+    const canvas = elements.videoOverlayCanvas;
+    const container = elements.videoContainer;
+    if (!canvas || !container) {
+        return;
+    }
+
+    const width = Math.max(1, Math.floor(container.clientWidth));
+    const height = Math.max(1, Math.floor(container.clientHeight));
+
+    if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+    }
+}
+
+function getContainedRect(containerWidth, containerHeight, sourceWidth, sourceHeight) {
+    if (!containerWidth || !containerHeight || !sourceWidth || !sourceHeight) {
+        return null;
+    }
+
+    const scale = Math.min(containerWidth / sourceWidth, containerHeight / sourceHeight);
+    const width = sourceWidth * scale;
+    const height = sourceHeight * scale;
+
+    return {
+        x: (containerWidth - width) / 2,
+        y: (containerHeight - height) / 2,
+        width,
+        height,
+        scale
+    };
+}
+
+function drawFaceOverlay() {
+    const canvas = elements.videoOverlayCanvas;
+    if (!canvas) {
+        return;
+    }
+
+    resizeFaceOverlayCanvas();
+    clearFaceOverlay();
+
+    if (!faceOverlayState.faces.length || !faceOverlayState.frameWidth || !faceOverlayState.frameHeight) {
+        return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const frameRect = getContainedRect(
+        canvas.width,
+        canvas.height,
+        faceOverlayState.frameWidth,
+        faceOverlayState.frameHeight
+    );
+
+    if (!frameRect) {
+        return;
+    }
+
+    const overlayRegion = faceOverlayState.overlayRegion || {
+        x: 0,
+        y: 0,
+        width: faceOverlayState.frameWidth,
+        height: faceOverlayState.frameHeight
+    };
+
+    faceOverlayState.faces.forEach((face) => {
+        const [x, y, width, height] = face.bounding_box || [0, 0, 0, 0];
+        const drawX = frameRect.x + (overlayRegion.x + x) * frameRect.scale;
+        const drawY = frameRect.y + (overlayRegion.y + y) * frameRect.scale;
+        const drawWidth = width * frameRect.scale;
+        const drawHeight = height * frameRect.scale;
+        const faceName = face.name || 'Unknown';
+        const isKnown = faceName !== 'Unknown';
+        const confidence = Number.isFinite(face.confidence) ? Math.round(face.confidence * 100) : 0;
+        const label = `${faceName} ${confidence}%`;
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = isKnown ? '#4ade80' : '#fbbf24';
+        ctx.strokeRect(drawX, drawY, drawWidth, drawHeight);
+
+        ctx.fillStyle = isKnown ? 'rgba(22, 163, 74, 0.88)' : 'rgba(217, 119, 6, 0.88)';
+        ctx.font = '14px sans-serif';
+        const textWidth = ctx.measureText(label).width;
+        const textHeight = 22;
+        const labelY = Math.max(0, drawY - textHeight - 4);
+        ctx.fillRect(drawX, labelY, textWidth + 16, textHeight);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, drawX + 8, labelY + 15);
+
+        ctx.beginPath();
+        ctx.arc(drawX + drawWidth / 2, drawY + drawHeight / 2, 4, 0, Math.PI * 2);
+        ctx.fillStyle = isKnown ? '#4ade80' : '#fbbf24';
+        ctx.fill();
+    });
 }
 
 // API 请求
@@ -515,11 +633,40 @@ log('🚀 系统启动');
 pollStatus();
 refreshCommDiagnostics();
 loadRegisteredFaces();
+updateFaceOverlay();
 setInterval(pollStatus, 1000);
 setInterval(refreshCommDiagnostics, 2000);
 setInterval(updateFaceTrackingStatus, 500);
+setInterval(updateFaceOverlay, 1200);
+
+window.addEventListener('resize', drawFaceOverlay);
+elements.videoStream?.addEventListener('load', drawFaceOverlay);
 
 // ==================== 人脸识别功能 ====================
+
+async function updateFaceOverlay() {
+    if (document.hidden || isFaceOverlayUpdating) {
+        return;
+    }
+
+    isFaceOverlayUpdating = true;
+    try {
+        const result = await apiSilent('/api/face/detect');
+        if (!result) {
+            faceOverlayState.faces = [];
+            drawFaceOverlay();
+            return;
+        }
+
+        faceOverlayState.faces = result.faces || [];
+        faceOverlayState.frameWidth = result.frame_width || 0;
+        faceOverlayState.frameHeight = result.frame_height || 0;
+        faceOverlayState.overlayRegion = result.overlay_region || null;
+        drawFaceOverlay();
+    } finally {
+        isFaceOverlayUpdating = false;
+    }
+}
 
 // 加载已注册人脸
 async function loadRegisteredFaces() {
@@ -620,7 +767,13 @@ async function stopFaceTracking() {
 // 更新人脸跟踪状态
 async function updateFaceTrackingStatus() {
     try {
-        const status = await api('/api/face/tracking/status');
+        const status = await apiSilent('/api/face/tracking/status');
+        if (!status) {
+            if (elements.currentFace) {
+                elements.currentFace.style.display = 'none';
+            }
+            return;
+        }
         
         if (status.is_face_tracking && status.current_face) {
             if (elements.currentFace) {
@@ -629,6 +782,7 @@ async function updateFaceTrackingStatus() {
             if (elements.currentFaceName) {
                 elements.currentFaceName.textContent = status.current_face.name;
             }
+            drawFaceOverlay();
         } else {
             if (elements.currentFace) {
                 elements.currentFace.style.display = 'none';
