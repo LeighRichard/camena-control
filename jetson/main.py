@@ -268,7 +268,12 @@ class CameraControlSystem:
         
         success = self.comm.connect()
         if success:
-            logger.info(f"✓ 串口已连接 ({self.config.comm.port})")
+            connected_port = (
+                self.comm.get_connected_port()
+                if hasattr(self.comm, "get_connected_port")
+                else self.config.comm.port
+            )
+            logger.info(f"✓ 串口已连接 ({connected_port})")
         else:
             logger.warning(f"✗ 串口连接失败")
             if not self.config.comm.required:
@@ -288,8 +293,6 @@ class CameraControlSystem:
         
         self.detector = ObjectDetector(det_config)
         success, message = self.detector.load_model()
-        if hasattr(self.detector, "_last_load_error"):
-            self.detector._last_load_error = None if success else message
 
         detector_status = (
             self.detector.get_runtime_status()
@@ -300,7 +303,16 @@ class CameraControlSystem:
         if success:
             engine = detector_status.get("inference_engine") or "unknown"
             model_path = detector_status.get("model_path") or "(unset)"
-            logger.info(f"✓ 目标检测器已初始化: {engine} [{model_path}]")
+            fallback_reason = detector_status.get("fallback_reason")
+            if detector_status.get("fallback_active"):
+                logger.warning(
+                    "✓ 目标检测器已初始化为回退后端: %s [%s] (原因: %s)",
+                    engine,
+                    model_path,
+                    fallback_reason or "primary backend unavailable",
+                )
+            else:
+                logger.info(f"✓ 目标检测器已初始化: {engine} [{model_path}]")
         else:
             logger.warning(f"✗ 目标检测模型加载失败: {message}")
     
@@ -330,8 +342,15 @@ class CameraControlSystem:
             if self.detector and hasattr(self.detector, "is_loaded")
             else False
         )
-        if not self.camera or not self.comm or not self.detector or not detector_loaded:
-            logger.warning("✗ 视觉伺服需要相机、串口和已加载的检测器，跳过初始化")
+        comm_connected = (
+            self.comm.is_connected()
+            if self.comm and hasattr(self.comm, "is_connected")
+            else False
+        )
+        if not self.camera or not comm_connected or not self.detector or not detector_loaded:
+            logger.warning(
+                "✗ 视觉伺服需要相机、已连接串口和已加载的检测器，跳过初始化"
+            )
             return
         
         from vision.visual_servo import VisualServoController, ServoConfig

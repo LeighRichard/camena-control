@@ -108,9 +108,9 @@ void safety_emergency_stop(void)
 
     motion_stop();
 
-    /* TMC2209 enable pins are active low, so high disables outputs. */
-    HAL_GPIO_WritePin(PAN_EN_GPIO_Port, PAN_EN_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(TILT_EN_GPIO_Port, TILT_EN_Pin, GPIO_PIN_SET);
+    /* Pan/tilt are PWM servos now and hold their last commanded position.
+     * Only the rail stepper driver is actively disabled here.
+     */
     HAL_GPIO_WritePin(RAIL_EN_GPIO_Port, RAIL_EN_Pin, GPIO_PIN_SET);
 }
 
@@ -121,8 +121,6 @@ void safety_reset(void)
         estop_active = false;
         current_status = SAFETY_OK;
 
-        HAL_GPIO_WritePin(PAN_EN_GPIO_Port, PAN_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(TILT_EN_GPIO_Port, TILT_EN_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(RAIL_EN_GPIO_Port, RAIL_EN_Pin, GPIO_PIN_RESET);
     }
 }

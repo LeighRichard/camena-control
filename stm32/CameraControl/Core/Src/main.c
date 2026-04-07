@@ -184,9 +184,7 @@ int main(void)
   safety_init();
   uart_comm_init();
 
-  /* TMC2209 enable pins are active low, so RESET enables the drivers. */
-  HAL_GPIO_WritePin(PAN_EN_GPIO_Port, PAN_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(TILT_EN_GPIO_Port, TILT_EN_Pin, GPIO_PIN_RESET);
+  /* Pan/tilt are now PWM servos. Only the rail stepper driver needs an enable pin. */
   HAL_GPIO_WritePin(RAIL_EN_GPIO_Port, RAIL_EN_Pin, GPIO_PIN_RESET);
 
   last_motion_update = HAL_GetTick();
@@ -337,7 +335,9 @@ static void process_command(const Command* cmd)
       break;
 
     case CMD_SET_VELOCITY:
-      /* Velocity commands use signed steps per second. */
+      /* Pan/tilt keep Jetson compatibility values and convert them into servo slew rates internally.
+       * Rail still uses signed steps per second.
+       */
       motion_set_velocity(cmd->axis, (float)cmd->value);
       rsp.type = RSP_SET_VELOCITY;
       break;

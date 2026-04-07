@@ -46,7 +46,7 @@ camera:
 comm:
   enabled: true
   required: false
-  port: "/dev/ttyUSB0"     # Linux: /dev/ttyUSB0, Windows: COM3
+  port: "auto"             # 自动优先匹配 /dev/ttyACM*、/dev/ttyUSB*，也可手动写死端口
   baudrate: 115200
   timeout: 1.0
   trace_protocol: false    # 打印串口 TX/RX 调试日志（seq/cmd/axis/value/status）

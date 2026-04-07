@@ -1,104 +1,108 @@
-﻿/**
+/**
  * @file motion.c
- * @brief 运动控制模块实现 - PID 控制器和 S 曲线速度规划
+ * @brief Hybrid motion backend: pan/tilt PWM servo + rail stepper.
  */
 
 #include "motion.h"
-#include "protocol.h"
 #include "main.h"
 #include <math.h>
 #include <string.h>
 
-/* 步进电机参数 */
-#define STEPS_PER_REV           200     /* 1.8度步距角 */
-#define MICROSTEPPING           16      /* 16 细分 */
-#define STEPS_PER_DEGREE        ((STEPS_PER_REV * MICROSTEPPING) / 360.0f)  /* 每度步数 */
-#define STEPS_PER_MM            ((STEPS_PER_REV * MICROSTEPPING) / 2.0f)    /* T8 丝杆导程 2mm */
+/* Rail stepper parameters */
+#define STEPS_PER_REV           200.0f
+#define MICROSTEPPING           16.0f
+#define STEPS_PER_MM            ((STEPS_PER_REV * MICROSTEPPING) / 2.0f) /* T8 lead screw: 2mm pitch */
 
-/* Jetson 侧约定的安全行程范围（单位：0.01 度 / 0.01 mm） */
-#define PAN_MIN_CDEG            (-18000)
-#define PAN_MAX_CDEG            (18000)
-#define TILT_MIN_CDEG           (-9000)
-#define TILT_MAX_CDEG           (9000)
+/* Servo output parameters */
+#define SERVO_PWM_PERIOD_US     20000U
+#define SERVO_MIN_PULSE_US      500U
+#define SERVO_CENTER_PULSE_US   1500U
+#define SERVO_MAX_PULSE_US      2500U
+
+/* Physical travel range derived from the PWM gimbal manual */
+#define PAN_MIN_CDEG            (-13500)
+#define PAN_MAX_CDEG            (13500)
+#define TILT_MIN_CDEG           (-11000)
+#define TILT_MAX_CDEG           (11000)
 #define RAIL_MIN_CMM            (0)
 #define RAIL_MAX_CMM            (50000)
 
-/* Jetson 侧单位换算器中定义的三轴安全速度上限（单位：steps/s） */
+/* Jetson-side safety caps */
 #define PAN_MAX_SPEED_STEPS     1000U
 #define TILT_MAX_SPEED_STEPS    800U
 #define RAIL_MAX_SPEED_STEPS    16000U
 
-/* 对应的人类可读速度上限（单位：0.01 度/s 或 0.01 mm/s） */
 #define PAN_MAX_VEL_CENTI       3000.0f
 #define TILT_MAX_VEL_CENTI      2000.0f
 #define RAIL_MAX_VEL_CENTI      600.0f
 
-/* 对应的加速度上限（单位：0.01 度/s^2 或 0.01 mm/s^2） */
 #define PAN_MAX_ACCEL_CENTI     4500.0f
 #define TILT_MAX_ACCEL_CENTI    4500.0f
 #define RAIL_MAX_ACCEL_CENTI    1000.0f
 
-/* 定时器计数频率 (预分频后) */
-/* TIM1: APB2 (168MHz) / (167+1) = 1MHz */
-/* TIM2/3: APB1 (84MHz) / (83+1) = 1MHz */
-#define TIM_COUNTER_FREQ        1000000  /* 1MHz */
+/* Timer counter frequency after prescaler */
+#define TIM_COUNTER_FREQ        1000000U
+#define SERVO_UPDATE_DT         0.001f
+#define STABLE_THRESHOLD        50U
 
-/* 外部定时器句柄 */
-extern TIM_HandleTypeDef htim1, htim2, htim3;
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
 
-/* 步数计数器 (在中断中更新) */
+/*
+ * Keep these globals for compatibility with the generated interrupt file.
+ * Pan/tilt are servo-driven now, so only rail_step_count is used actively.
+ */
 volatile int32_t pan_step_count = 0;
 volatile int32_t tilt_step_count = 0;
 volatile int32_t rail_step_count = 0;
 
-/* ==================== 私有变量 ==================== */
+typedef struct {
+    float current_cdeg;
+    float target_cdeg;
+    float velocity_cmd_cdeg_s;
+    bool velocity_mode;
+} ServoAxisState;
 
-/* 三轴 PID 控制器 */
+typedef struct {
+    float position;
+    float velocity;
+    float acceleration;
+    float target_position;
+    float target_velocity;
+    float direction;
+    uint8_t phase;
+    uint8_t complete;
+} SCurveState;
+
 static PIDController pid_pan;
 static PIDController pid_tilt;
 static PIDController pid_rail;
 
-/* 当前位置和目标位置 */
 static Position current_position = {0, 0, 0};
 static Position target_position = {0, 0, 0};
 
-/* 运动配置 */
 static MotionProfile motion_profile = {
-    .max_velocity = 3000.0f,    /* 全局速度上限，会再按轴限幅 */
-    .max_accel = 4500.0f,       /* 全局加速度上限，会再按轴限幅 */
-    .jerk = 1200.0f             /* 加加速度 */
+    .max_velocity = 3000.0f,
+    .max_accel = 4500.0f,
+    .jerk = 1200.0f,
 };
 
-/* 位置限位 */
 static PositionLimits position_limits = {
     .pan_min = PAN_MIN_CDEG,
     .pan_max = PAN_MAX_CDEG,
     .tilt_min = TILT_MIN_CDEG,
     .tilt_max = TILT_MAX_CDEG,
     .rail_min = RAIL_MIN_CMM,
-    .rail_max = RAIL_MAX_CMM
+    .rail_max = RAIL_MAX_CMM,
 };
 
-/* S 曲线规划状态 */
-typedef struct {
-    float position;             /* 当前规划位置 */
-    float velocity;             /* 当前速度 */
-    float acceleration;         /* 当前加速度 */
-    float target_position;      /* 目标位置 */
-    float target_velocity;      /* 目标速度 */
-    float direction;            /* 运动方向 (+1/-1) */
-    uint8_t phase;              /* 当前阶段 (0-6) */
-    uint8_t complete;           /* 是否完成 (使用 uint8_t 替代 bool) */
-    uint8_t active;             /* 是否激活 (使用 uint8_t 替代 bool) */
-} SCurveState;
+static ServoAxisState servo_pan = {0};
+static ServoAxisState servo_tilt = {0};
+static SCurveState scurve_rail = {0};
 
-static SCurveState scurve_pan;
-static SCurveState scurve_tilt;
-static SCurveState scurve_rail;
-static bool has_active_velocity(const SCurveState* state)
-{
-    return fabsf(state->target_velocity) > 0.0001f;
-}
+static bool is_moving = false;
+static uint32_t stable_counter = 0;
 
 static float clampf_value(float value, float min_value, float max_value)
 {
@@ -107,15 +111,11 @@ static float clampf_value(float value, float min_value, float max_value)
     return value;
 }
 
-static uint32_t get_axis_step_limit(uint8_t axis)
+static int32_t clamp_i32(int32_t value, int32_t min_value, int32_t max_value)
 {
-    switch (axis)
-    {
-        case AXIS_PAN: return PAN_MAX_SPEED_STEPS;
-        case AXIS_TILT: return TILT_MAX_SPEED_STEPS;
-        case AXIS_RAIL: return RAIL_MAX_SPEED_STEPS;
-        default: return PAN_MAX_SPEED_STEPS;
-    }
+    if (value < min_value) return min_value;
+    if (value > max_value) return max_value;
+    return value;
 }
 
 static float get_axis_velocity_limit(uint8_t axis)
@@ -158,64 +158,290 @@ static float get_axis_accel_limit(uint8_t axis)
     return fminf(motion_profile.max_accel, safe_limit);
 }
 
-static float centi_velocity_to_step_frequency(uint8_t axis, float velocity)
+static float centi_velocity_to_step_frequency(float velocity_centi)
+{
+    return fabsf(velocity_centi) * STEPS_PER_MM / 100.0f;
+}
+
+static float servo_steps_to_centi_velocity(float steps_per_sec)
+{
+    const float steps_per_degree = (STEPS_PER_REV * MICROSTEPPING) / 360.0f;
+    return (steps_per_sec / steps_per_degree) * 100.0f;
+}
+
+static bool has_active_velocity(const SCurveState* state)
+{
+    return fabsf(state->target_velocity) > 0.0001f;
+}
+
+static void scurve_init(SCurveState* state, float start, float target)
+{
+    state->position = start;
+    state->velocity = 0.0f;
+    state->acceleration = 0.0f;
+    state->target_position = target;
+    state->target_velocity = 0.0f;
+    state->direction = (target >= start) ? 1.0f : -1.0f;
+    state->phase = 0;
+    state->complete = (fabsf(target - start) < 0.1f) ? 1u : 0u;
+}
+
+static float scurve_update(SCurveState* state, float dt, float max_vel, float max_acc, float jerk)
+{
+    float distance;
+    float decel_distance;
+
+    if (state->complete)
+    {
+        return state->target_position;
+    }
+
+    distance = fabsf(state->target_position - state->position);
+    decel_distance = (state->velocity * state->velocity) / (2.0f * fmaxf(max_acc, 1.0f));
+
+    switch (state->phase)
+    {
+        case 0:
+            state->acceleration += jerk * dt;
+            if (state->acceleration >= max_acc) { state->acceleration = max_acc; state->phase = 1; }
+            break;
+        case 1:
+            if (state->velocity >= max_vel * 0.5f || distance < decel_distance * 2.0f) state->phase = 2;
+            break;
+        case 2:
+            state->acceleration -= jerk * dt;
+            if (state->acceleration <= 0.0f) { state->acceleration = 0.0f; state->phase = 3; }
+            break;
+        case 3:
+            if (distance <= decel_distance * 1.5f) state->phase = 4;
+            break;
+        case 4:
+            state->acceleration -= jerk * dt;
+            if (state->acceleration <= -max_acc) { state->acceleration = -max_acc; state->phase = 5; }
+            break;
+        case 5:
+            if (state->velocity <= max_vel * 0.1f || distance < 10.0f) state->phase = 6;
+            break;
+        case 6:
+            state->acceleration += jerk * dt;
+            if (state->acceleration >= 0.0f || distance < 1.0f)
+            {
+                state->acceleration = 0.0f;
+                state->velocity = 0.0f;
+                state->position = state->target_position;
+                state->complete = 1u;
+                return state->position;
+            }
+            break;
+        default:
+            break;
+    }
+
+    state->velocity += state->acceleration * dt * state->direction;
+    if (fabsf(state->velocity) > max_vel)
+    {
+        state->velocity = max_vel * state->direction;
+    }
+    if (state->velocity * state->direction < 0.0f)
+    {
+        state->velocity = 0.0f;
+    }
+
+    state->position += state->velocity * dt;
+
+    if ((state->direction > 0.0f && state->position >= state->target_position) ||
+        (state->direction < 0.0f && state->position <= state->target_position))
+    {
+        state->position = state->target_position;
+        state->velocity = 0.0f;
+        state->complete = 1u;
+    }
+
+    return state->position;
+}
+
+static uint32_t servo_angle_to_pulse_us(int32_t angle_cdeg, int32_t min_cdeg, int32_t max_cdeg)
+{
+    int32_t clamped = clamp_i32(angle_cdeg, min_cdeg, max_cdeg);
+    float ratio = (float)(clamped - min_cdeg) / (float)(max_cdeg - min_cdeg);
+    float pulse = (float)SERVO_MIN_PULSE_US +
+                  ratio * (float)(SERVO_MAX_PULSE_US - SERVO_MIN_PULSE_US);
+
+    if (pulse < (float)SERVO_MIN_PULSE_US) pulse = (float)SERVO_MIN_PULSE_US;
+    if (pulse > (float)SERVO_MAX_PULSE_US) pulse = (float)SERVO_MAX_PULSE_US;
+    return (uint32_t)lroundf(pulse);
+}
+
+static void servo_write_pulse_us(TIM_HandleTypeDef* htim, uint32_t pulse_us)
+{
+    if (pulse_us > SERVO_PWM_PERIOD_US)
+    {
+        pulse_us = SERVO_PWM_PERIOD_US;
+    }
+
+    __HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, pulse_us);
+}
+
+static void servo_sync_output(uint8_t axis)
 {
     switch (axis)
     {
         case AXIS_PAN:
+            servo_write_pulse_us(
+                &htim1,
+                servo_angle_to_pulse_us(
+                    (int32_t)lroundf(servo_pan.current_cdeg),
+                    position_limits.pan_min,
+                    position_limits.pan_max
+                )
+            );
+            break;
+
         case AXIS_TILT:
-            return fabsf(velocity) * STEPS_PER_DEGREE / 100.0f;
-        case AXIS_RAIL:
-            return fabsf(velocity) * STEPS_PER_MM / 100.0f;
+            servo_write_pulse_us(
+                &htim2,
+                servo_angle_to_pulse_us(
+                    (int32_t)lroundf(servo_tilt.current_cdeg),
+                    position_limits.tilt_min,
+                    position_limits.tilt_max
+                )
+            );
+            break;
+
         default:
-            return 0.0f;
+            break;
     }
 }
 
-static void set_stepper_frequency(TIM_HandleTypeDef* htim, uint8_t axis, uint32_t freq_hz);
+static bool servo_update_axis(
+    uint8_t axis,
+    ServoAxisState* state,
+    int32_t* current_field,
+    int32_t* target_field,
+    int32_t min_limit,
+    int32_t max_limit,
+    float max_speed_cdeg_s
+)
+{
+    float max_delta = fmaxf(max_speed_cdeg_s * SERVO_UPDATE_DT, 1.0f);
+    bool active = false;
+
+    state->target_cdeg = clampf_value(state->target_cdeg, (float)min_limit, (float)max_limit);
+
+    if (state->velocity_mode)
+    {
+        float velocity = clampf_value(
+            state->velocity_cmd_cdeg_s,
+            -max_speed_cdeg_s,
+            max_speed_cdeg_s
+        );
+
+        if (fabsf(velocity) < 0.5f)
+        {
+            state->velocity_mode = false;
+            state->velocity_cmd_cdeg_s = 0.0f;
+            state->target_cdeg = state->current_cdeg;
+        }
+        else
+        {
+            state->current_cdeg += velocity * SERVO_UPDATE_DT;
+            state->current_cdeg = clampf_value(
+                state->current_cdeg,
+                (float)min_limit,
+                (float)max_limit
+            );
+            state->target_cdeg = state->current_cdeg;
+            active = true;
+        }
+    }
+    else
+    {
+        float error = state->target_cdeg - state->current_cdeg;
+
+        if (fabsf(error) > 0.5f)
+        {
+            float delta = clampf_value(error, -max_delta, max_delta);
+            state->current_cdeg += delta;
+
+            if (fabsf(state->target_cdeg - state->current_cdeg) <= 0.5f)
+            {
+                state->current_cdeg = state->target_cdeg;
+            }
+
+            active = true;
+        }
+    }
+
+    *current_field = (int32_t)lroundf(state->current_cdeg);
+    *target_field = (int32_t)lroundf(state->target_cdeg);
+    servo_sync_output(axis);
+    return active;
+}
+
+static void set_rail_stepper_frequency(uint32_t freq_hz)
+{
+    uint32_t arr;
+
+    if (freq_hz == 0U)
+    {
+        HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
+        return;
+    }
+
+    if (freq_hz > RAIL_MAX_SPEED_STEPS)
+    {
+        freq_hz = RAIL_MAX_SPEED_STEPS;
+    }
+    if (freq_hz < 10U)
+    {
+        freq_hz = 10U;
+    }
+
+    arr = (TIM_COUNTER_FREQ / freq_hz) - 1U;
+    if (arr > 65535U) arr = 65535U;
+    if (arr < 1U) arr = 1U;
+
+    __HAL_TIM_DISABLE_IT(&htim3, TIM_IT_UPDATE);
+    __HAL_TIM_SET_AUTORELOAD(&htim3, arr);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, arr / 2U);
+    htim3.Instance->EGR = TIM_EGR_UG;
+    __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE);
+    __HAL_TIM_ENABLE_IT(&htim3, TIM_IT_UPDATE);
+
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+}
 
 static void stop_axis_state(uint8_t axis)
 {
     switch (axis)
     {
         case AXIS_PAN:
-            set_stepper_frequency(&htim1, AXIS_PAN, 0);
-            scurve_pan.position = (float)current_position.pan_angle;
-            scurve_pan.target_position = (float)current_position.pan_angle;
-            scurve_pan.target_velocity = 0.0f;
-            scurve_pan.velocity = 0.0f;
-            scurve_pan.acceleration = 0.0f;
-            scurve_pan.phase = 0;
-            scurve_pan.complete = 1;
-            scurve_pan.active = 0;
-            target_position.pan_angle = current_position.pan_angle;
+            servo_pan.velocity_mode = false;
+            servo_pan.velocity_cmd_cdeg_s = 0.0f;
+            servo_pan.target_cdeg = servo_pan.current_cdeg;
+            target_position.pan_angle = (int32_t)lroundf(servo_pan.current_cdeg);
+            servo_sync_output(AXIS_PAN);
             pid_reset(&pid_pan);
             break;
 
         case AXIS_TILT:
-            set_stepper_frequency(&htim2, AXIS_TILT, 0);
-            scurve_tilt.position = (float)current_position.tilt_angle;
-            scurve_tilt.target_position = (float)current_position.tilt_angle;
-            scurve_tilt.target_velocity = 0.0f;
-            scurve_tilt.velocity = 0.0f;
-            scurve_tilt.acceleration = 0.0f;
-            scurve_tilt.phase = 0;
-            scurve_tilt.complete = 1;
-            scurve_tilt.active = 0;
-            target_position.tilt_angle = current_position.tilt_angle;
+            servo_tilt.velocity_mode = false;
+            servo_tilt.velocity_cmd_cdeg_s = 0.0f;
+            servo_tilt.target_cdeg = servo_tilt.current_cdeg;
+            target_position.tilt_angle = (int32_t)lroundf(servo_tilt.current_cdeg);
+            servo_sync_output(AXIS_TILT);
             pid_reset(&pid_tilt);
             break;
 
         case AXIS_RAIL:
-            set_stepper_frequency(&htim3, AXIS_RAIL, 0);
+            set_rail_stepper_frequency(0U);
             scurve_rail.position = (float)current_position.rail_pos;
             scurve_rail.target_position = (float)current_position.rail_pos;
             scurve_rail.target_velocity = 0.0f;
             scurve_rail.velocity = 0.0f;
             scurve_rail.acceleration = 0.0f;
-            scurve_rail.phase = 0;
-            scurve_rail.complete = 1;
-            scurve_rail.active = 0;
+            scurve_rail.phase = 0u;
+            scurve_rail.complete = 1u;
             target_position.rail_pos = current_position.rail_pos;
             pid_reset(&pid_rail);
             break;
@@ -224,13 +450,6 @@ static void stop_axis_state(uint8_t axis)
             break;
     }
 }
-
-/* 运动状态 */
-static bool is_moving = false;
-static uint32_t stable_counter = 0;
-#define STABLE_THRESHOLD 50     /* 稳定计数阈值 */
-
-/* ==================== PID 控制器实现 ==================== */
 
 void pid_init(PIDController* pid, float kp, float ki, float kd)
 {
@@ -259,165 +478,113 @@ void pid_set_limits(PIDController* pid, float output_min, float output_max, floa
 
 float pid_compute(PIDController* pid, float setpoint, float current, float dt)
 {
-    /* 防止除零 */
+    float error;
+    float p_term;
+    float i_term;
+    float derivative;
+    float d_term;
+    float output;
+
     if (dt <= 0.0f) dt = 0.001f;
-    
-    float error = setpoint - current;
-    float p_term = pid->kp * error;
-    
+
+    error = setpoint - current;
+    p_term = pid->kp * error;
+
     pid->integral += error * dt;
     if (pid->integral > pid->integral_max) pid->integral = pid->integral_max;
     else if (pid->integral < -pid->integral_max) pid->integral = -pid->integral_max;
-    float i_term = pid->ki * pid->integral;
-    
-    float derivative = (error - pid->prev_error) / dt;
-    float d_term = pid->kd * derivative;
+    i_term = pid->ki * pid->integral;
+
+    derivative = (error - pid->prev_error) / dt;
+    d_term = pid->kd * derivative;
     pid->prev_error = error;
-    
-    float output = p_term + i_term + d_term;
+
+    output = p_term + i_term + d_term;
     if (output > pid->output_max) output = pid->output_max;
     else if (output < pid->output_min) output = pid->output_min;
-    
+
     return output;
 }
-
-/* ==================== S 曲线速度规划 ==================== */
-
-static void scurve_init(SCurveState* state, float start, float target)
-{
-    state->position = start;
-    state->velocity = 0.0f;
-    state->acceleration = 0.0f;
-    state->target_position = target;
-    state->direction = (target >= start) ? 1.0f : -1.0f;
-    state->phase = 0;
-    state->complete = (fabsf(target - start) < 0.1f) ? 1 : 0;
-}
-
-static float scurve_update(SCurveState* state, float dt, float max_vel, float max_acc, float jerk)
-{
-    if (state->complete) return state->target_position;
-    
-    float distance = fabsf(state->target_position - state->position);
-    float decel_distance = (state->velocity * state->velocity) / (2.0f * max_acc);
-    
-    switch (state->phase)
-    {
-        case 0: /* 加加速 */
-            state->acceleration += jerk * dt;
-            if (state->acceleration >= max_acc) { state->acceleration = max_acc; state->phase = 1; }
-            break;
-        case 1: /* 匀加速 */
-            if (state->velocity >= max_vel * 0.5f || distance < decel_distance * 2.0f) state->phase = 2;
-            break;
-        case 2: /* 减加速 */
-            state->acceleration -= jerk * dt;
-            if (state->acceleration <= 0.0f) { state->acceleration = 0.0f; state->phase = 3; }
-            break;
-        case 3: /* 匀速 */
-            if (distance <= decel_distance * 1.5f) state->phase = 4;
-            break;
-        case 4: /* 加减速 */
-            state->acceleration -= jerk * dt;
-            if (state->acceleration <= -max_acc) { state->acceleration = -max_acc; state->phase = 5; }
-            break;
-        case 5: /* 匀减速 */
-            if (state->velocity <= max_vel * 0.1f || distance < 10.0f) state->phase = 6;
-            break;
-        case 6: /* 减减速 */
-            state->acceleration += jerk * dt;
-            if (state->acceleration >= 0.0f || distance < 1.0f) {
-                state->acceleration = 0.0f;
-                state->velocity = 0.0f;
-                state->position = state->target_position;
-                state->complete = 1;
-                return state->position;
-            }
-            break;
-    }
-    
-    state->velocity += state->acceleration * dt * state->direction;
-    if (fabsf(state->velocity) > max_vel) state->velocity = max_vel * state->direction;
-    if (state->velocity * state->direction < 0) state->velocity = 0;
-    
-    state->position += state->velocity * dt;
-    
-    if ((state->direction > 0 && state->position >= state->target_position) ||
-        (state->direction < 0 && state->position <= state->target_position))
-    {
-        state->position = state->target_position;
-        state->velocity = 0.0f;
-        state->complete = 1;
-    }
-    
-    return state->position;
-}
-
-/* ==================== 运动控制接口 ==================== */
 
 void motion_init(void)
 {
     pid_init(&pid_pan, 2.0f, 0.1f, 0.5f);
     pid_init(&pid_tilt, 2.0f, 0.1f, 0.5f);
     pid_init(&pid_rail, 1.5f, 0.05f, 0.3f);
-    
+
     pid_set_limits(&pid_pan, -PAN_MAX_VEL_CENTI, PAN_MAX_VEL_CENTI, 1500.0f);
     pid_set_limits(&pid_tilt, -TILT_MAX_VEL_CENTI, TILT_MAX_VEL_CENTI, 1000.0f);
     pid_set_limits(&pid_rail, -RAIL_MAX_VEL_CENTI, RAIL_MAX_VEL_CENTI, 300.0f);
-    
-    memset(&current_position, 0, sizeof(Position));
-    memset(&target_position, 0, sizeof(Position));
-    memset(&scurve_pan, 0, sizeof(scurve_pan));
-    memset(&scurve_tilt, 0, sizeof(scurve_tilt));
+
+    memset(&current_position, 0, sizeof(current_position));
+    memset(&target_position, 0, sizeof(target_position));
+    memset(&servo_pan, 0, sizeof(servo_pan));
+    memset(&servo_tilt, 0, sizeof(servo_tilt));
     memset(&scurve_rail, 0, sizeof(scurve_rail));
-    scurve_pan.complete = 1;
-    scurve_tilt.complete = 1;
-    scurve_rail.complete = 1;
-    
+    scurve_rail.complete = 1u;
+
+    servo_pan.current_cdeg = 0.0f;
+    servo_pan.target_cdeg = 0.0f;
+    servo_tilt.current_cdeg = 0.0f;
+    servo_tilt.target_cdeg = 0.0f;
+
+    if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    servo_write_pulse_us(&htim1, SERVO_CENTER_PULSE_US);
+    servo_write_pulse_us(&htim2, SERVO_CENTER_PULSE_US);
+
     is_moving = false;
-    stable_counter = 0;
+    stable_counter = 0U;
 }
 
 void motion_move_to_position(const Position* target)
 {
     Position safe_target = *target;
-    
-    if (safe_target.pan_angle < position_limits.pan_min) safe_target.pan_angle = position_limits.pan_min;
-    if (safe_target.pan_angle > position_limits.pan_max) safe_target.pan_angle = position_limits.pan_max;
-    if (safe_target.tilt_angle < position_limits.tilt_min) safe_target.tilt_angle = position_limits.tilt_min;
-    if (safe_target.tilt_angle > position_limits.tilt_max) safe_target.tilt_angle = position_limits.tilt_max;
-    if (safe_target.rail_pos < position_limits.rail_min) safe_target.rail_pos = position_limits.rail_min;
-    if (safe_target.rail_pos > position_limits.rail_max) safe_target.rail_pos = position_limits.rail_max;
-    
+
+    safe_target.pan_angle = clamp_i32(safe_target.pan_angle, position_limits.pan_min, position_limits.pan_max);
+    safe_target.tilt_angle = clamp_i32(safe_target.tilt_angle, position_limits.tilt_min, position_limits.tilt_max);
+    safe_target.rail_pos = clamp_i32(safe_target.rail_pos, position_limits.rail_min, position_limits.rail_max);
+
     target_position = safe_target;
-    
-    scurve_init(&scurve_pan, (float)current_position.pan_angle, (float)safe_target.pan_angle);
-    scurve_init(&scurve_tilt, (float)current_position.tilt_angle, (float)safe_target.tilt_angle);
+
+    servo_pan.target_cdeg = (float)safe_target.pan_angle;
+    servo_pan.velocity_mode = false;
+    servo_pan.velocity_cmd_cdeg_s = 0.0f;
+
+    servo_tilt.target_cdeg = (float)safe_target.tilt_angle;
+    servo_tilt.velocity_mode = false;
+    servo_tilt.velocity_cmd_cdeg_s = 0.0f;
+
     scurve_init(&scurve_rail, (float)current_position.rail_pos, (float)safe_target.rail_pos);
-    scurve_pan.target_velocity = 0.0f;
-    scurve_tilt.target_velocity = 0.0f;
-    scurve_rail.target_velocity = 0.0f;
-    
+
     pid_reset(&pid_pan);
     pid_reset(&pid_tilt);
     pid_reset(&pid_rail);
-    
+
     is_moving = true;
-    stable_counter = 0;
+    stable_counter = 0U;
 }
 
 void motion_move_to(uint8_t axis, int32_t value)
 {
     Position target = target_position;
-    
+
     switch (axis)
     {
         case AXIS_PAN: target.pan_angle = value; break;
         case AXIS_TILT: target.tilt_angle = value; break;
         case AXIS_RAIL: target.rail_pos = value; break;
         case AXIS_ALL: return;
+        default: return;
     }
-    
+
     motion_move_to_position(&target);
 }
 
@@ -436,7 +603,7 @@ void motion_stop_axis(uint8_t axis)
 
     stop_axis_state(axis);
     is_moving = !motion_is_complete();
-    stable_counter = 0;
+    stable_counter = 0U;
 }
 
 Position motion_get_current(void)
@@ -457,10 +624,13 @@ int32_t motion_get_position(uint8_t axis)
 
 bool motion_is_complete(void)
 {
-    return scurve_pan.complete && scurve_tilt.complete && scurve_rail.complete &&
-           !has_active_velocity(&scurve_pan) &&
-           !has_active_velocity(&scurve_tilt) &&
-           !has_active_velocity(&scurve_rail);
+    bool pan_done = !servo_pan.velocity_mode &&
+                    fabsf(servo_pan.target_cdeg - servo_pan.current_cdeg) <= 0.5f;
+    bool tilt_done = !servo_tilt.velocity_mode &&
+                     fabsf(servo_tilt.target_cdeg - servo_tilt.current_cdeg) <= 0.5f;
+    bool rail_done = scurve_rail.complete && !has_active_velocity(&scurve_rail);
+
+    return pan_done && tilt_done && rail_done;
 }
 
 bool motion_is_stable(void)
@@ -476,6 +646,16 @@ void motion_set_profile(const MotionProfile* profile)
 void motion_set_limits(const PositionLimits* limits)
 {
     position_limits = *limits;
+    servo_pan.target_cdeg = clampf_value(
+        servo_pan.target_cdeg,
+        (float)position_limits.pan_min,
+        (float)position_limits.pan_max
+    );
+    servo_tilt.target_cdeg = clampf_value(
+        servo_tilt.target_cdeg,
+        (float)position_limits.tilt_min,
+        (float)position_limits.tilt_max
+    );
 }
 
 bool motion_check_limits(const Position* pos)
@@ -488,161 +668,99 @@ bool motion_check_limits(const Position* pos)
 
 void motion_home(uint8_t axis)
 {
-    Position home = {0, 0, 0};
-    
+    Position home = current_position;
+
     switch (axis)
     {
         case AXIS_PAN:
-            home.tilt_angle = current_position.tilt_angle;
-            home.rail_pos = current_position.rail_pos;
+            home.pan_angle = 0;
             break;
         case AXIS_TILT:
-            home.pan_angle = current_position.pan_angle;
-            home.rail_pos = current_position.rail_pos;
+            home.tilt_angle = 0;
             break;
         case AXIS_RAIL:
-            home.pan_angle = current_position.pan_angle;
-            home.tilt_angle = current_position.tilt_angle;
+            home.rail_pos = 0;
             break;
         case AXIS_ALL:
+            home.pan_angle = 0;
+            home.tilt_angle = 0;
+            home.rail_pos = 0;
             break;
+        default:
+            return;
     }
-    
-    motion_move_to_position(&home);
-}
 
-static void set_stepper_frequency(TIM_HandleTypeDef* htim, uint8_t axis, uint32_t freq_hz)
-{
-    if (freq_hz == 0)
-    {
-        HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_1);
-        return;
-    }
-    
-    if (freq_hz > get_axis_step_limit(axis)) freq_hz = get_axis_step_limit(axis);
-    if (freq_hz < 10) freq_hz = 10;
-    
-    uint32_t arr = (TIM_COUNTER_FREQ / freq_hz) - 1;
-    if (arr > 65535) arr = 65535;
-    if (arr < 1) arr = 1;  /* 防止 ARR 为 0 */
-    
-    /* 禁用定时器更新中断，防止在修改 ARR 时触发中断 */
-    __HAL_TIM_DISABLE_IT(htim, TIM_IT_UPDATE);
-    
-    __HAL_TIM_SET_AUTORELOAD(htim, arr);
-    __HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, arr / 2);
-    
-    /* 生成更新事件以立即加载新的 ARR 值 */
-    htim->Instance->EGR = TIM_EGR_UG;
-    
-    /* 清除更新中断标志 (EGR 会产生更新事件) */
-    __HAL_TIM_CLEAR_FLAG(htim, TIM_FLAG_UPDATE);
-    
-    /* 重新启用更新中断 */
-    __HAL_TIM_ENABLE_IT(htim, TIM_IT_UPDATE);
-    
-    HAL_TIM_PWM_Start(htim, TIM_CHANNEL_1);
+    motion_move_to_position(&home);
 }
 
 void motion_update(void)
 {
-    const float dt = 0.001f;
-
-    float actual_pan = (float)pan_step_count / STEPS_PER_DEGREE * 100.0f;
-    float actual_tilt = (float)tilt_step_count / STEPS_PER_DEGREE * 100.0f;
-    float actual_rail = (float)rail_step_count / STEPS_PER_MM * 100.0f;
-
-    bool pan_active = false;
-    bool tilt_active = false;
+    bool pan_active;
+    bool tilt_active;
     bool rail_active = false;
+    float actual_rail;
 
-    if (has_active_velocity(&scurve_pan))
-    {
-        HAL_GPIO_WritePin(PAN_DIR_GPIO_Port, PAN_DIR_Pin,
-                          scurve_pan.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        set_stepper_frequency(&htim1, AXIS_PAN,
-                              (uint32_t)fminf(fabsf(scurve_pan.target_velocity), (float)PAN_MAX_SPEED_STEPS));
-        pan_active = true;
-    }
-    else if (!scurve_pan.complete)
-    {
-        float planned_pan = scurve_update(
-            &scurve_pan,
-            dt,
-            get_axis_velocity_limit(AXIS_PAN),
-            get_axis_accel_limit(AXIS_PAN),
-            motion_profile.jerk
-        );
-        float output_pan = pid_compute(&pid_pan, planned_pan, actual_pan, dt);
-        HAL_GPIO_WritePin(PAN_DIR_GPIO_Port, PAN_DIR_Pin, output_pan >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        uint32_t freq_pan = (uint32_t)centi_velocity_to_step_frequency(AXIS_PAN, output_pan);
-        set_stepper_frequency(&htim1, AXIS_PAN, freq_pan);
-        pan_active = true;
-    }
-    else
-    {
-        set_stepper_frequency(&htim1, AXIS_PAN, 0);
-    }
+    pan_active = servo_update_axis(
+        AXIS_PAN,
+        &servo_pan,
+        &current_position.pan_angle,
+        &target_position.pan_angle,
+        position_limits.pan_min,
+        position_limits.pan_max,
+        get_axis_velocity_limit(AXIS_PAN)
+    );
 
-    if (has_active_velocity(&scurve_tilt))
-    {
-        HAL_GPIO_WritePin(TILT_DIR_GPIO_Port, TILT_DIR_Pin,
-                          scurve_tilt.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        set_stepper_frequency(&htim2, AXIS_TILT,
-                              (uint32_t)fminf(fabsf(scurve_tilt.target_velocity), (float)TILT_MAX_SPEED_STEPS));
-        tilt_active = true;
-    }
-    else if (!scurve_tilt.complete)
-    {
-        float planned_tilt = scurve_update(
-            &scurve_tilt,
-            dt,
-            get_axis_velocity_limit(AXIS_TILT),
-            get_axis_accel_limit(AXIS_TILT),
-            motion_profile.jerk
-        );
-        float output_tilt = pid_compute(&pid_tilt, planned_tilt, actual_tilt, dt);
-        HAL_GPIO_WritePin(TILT_DIR_GPIO_Port, TILT_DIR_Pin, output_tilt >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        uint32_t freq_tilt = (uint32_t)centi_velocity_to_step_frequency(AXIS_TILT, output_tilt);
-        set_stepper_frequency(&htim2, AXIS_TILT, freq_tilt);
-        tilt_active = true;
-    }
-    else
-    {
-        set_stepper_frequency(&htim2, AXIS_TILT, 0);
-    }
+    tilt_active = servo_update_axis(
+        AXIS_TILT,
+        &servo_tilt,
+        &current_position.tilt_angle,
+        &target_position.tilt_angle,
+        position_limits.tilt_min,
+        position_limits.tilt_max,
+        get_axis_velocity_limit(AXIS_TILT)
+    );
+
+    actual_rail = ((float)rail_step_count / STEPS_PER_MM) * 100.0f;
+    current_position.rail_pos = (int32_t)lroundf(actual_rail);
 
     if (has_active_velocity(&scurve_rail))
     {
-        HAL_GPIO_WritePin(RAIL_DIR_GPIO_Port, RAIL_DIR_Pin,
-                          scurve_rail.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        set_stepper_frequency(&htim3, AXIS_RAIL,
-                              (uint32_t)fminf(fabsf(scurve_rail.target_velocity), (float)RAIL_MAX_SPEED_STEPS));
+        HAL_GPIO_WritePin(
+            RAIL_DIR_GPIO_Port,
+            RAIL_DIR_Pin,
+            scurve_rail.target_velocity >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET
+        );
+        set_rail_stepper_frequency(
+            (uint32_t)fminf(fabsf(scurve_rail.target_velocity), (float)RAIL_MAX_SPEED_STEPS)
+        );
         rail_active = true;
     }
     else if (!scurve_rail.complete)
     {
         float planned_rail = scurve_update(
             &scurve_rail,
-            dt,
+            SERVO_UPDATE_DT,
             get_axis_velocity_limit(AXIS_RAIL),
             get_axis_accel_limit(AXIS_RAIL),
             motion_profile.jerk
         );
-        float output_rail = pid_compute(&pid_rail, planned_rail, actual_rail, dt);
-        HAL_GPIO_WritePin(RAIL_DIR_GPIO_Port, RAIL_DIR_Pin, output_rail >= 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        uint32_t freq_rail = (uint32_t)centi_velocity_to_step_frequency(AXIS_RAIL, output_rail);
-        set_stepper_frequency(&htim3, AXIS_RAIL, freq_rail);
+        float output_rail = pid_compute(&pid_rail, planned_rail, actual_rail, SERVO_UPDATE_DT);
+        uint32_t freq_rail = (uint32_t)centi_velocity_to_step_frequency(output_rail);
+
+        HAL_GPIO_WritePin(
+            RAIL_DIR_GPIO_Port,
+            RAIL_DIR_Pin,
+            output_rail >= 0.0f ? GPIO_PIN_SET : GPIO_PIN_RESET
+        );
+        set_rail_stepper_frequency(freq_rail);
         rail_active = true;
     }
     else
     {
-        set_stepper_frequency(&htim3, AXIS_RAIL, 0);
+        set_rail_stepper_frequency(0U);
     }
 
-    current_position.pan_angle = (int32_t)actual_pan;
-    current_position.tilt_angle = (int32_t)actual_tilt;
-    current_position.rail_pos = (int32_t)actual_rail;
+    target_position.rail_pos = (int32_t)lroundf(scurve_rail.target_position);
 
     is_moving = pan_active || tilt_active || rail_active;
     if (!is_moving)
@@ -651,101 +769,113 @@ void motion_update(void)
         return;
     }
 
-    stable_counter = 0;
+    stable_counter = 0U;
 }
 
 void motion_plan_s_curve(const Position* start, const Position* end, const MotionProfile* profile)
 {
-    if (profile) motion_profile = *profile;
+    if (profile != NULL)
+    {
+        motion_profile = *profile;
+    }
+
     current_position = *start;
+    target_position = *start;
+
+    servo_pan.current_cdeg = (float)clamp_i32(start->pan_angle, position_limits.pan_min, position_limits.pan_max);
+    servo_pan.target_cdeg = servo_pan.current_cdeg;
+    servo_pan.velocity_cmd_cdeg_s = 0.0f;
+    servo_pan.velocity_mode = false;
+
+    servo_tilt.current_cdeg = (float)clamp_i32(start->tilt_angle, position_limits.tilt_min, position_limits.tilt_max);
+    servo_tilt.target_cdeg = servo_tilt.current_cdeg;
+    servo_tilt.velocity_cmd_cdeg_s = 0.0f;
+    servo_tilt.velocity_mode = false;
+
+    rail_step_count = (int32_t)lroundf(((float)start->rail_pos / 100.0f) * STEPS_PER_MM);
+    servo_sync_output(AXIS_PAN);
+    servo_sync_output(AXIS_TILT);
+
     motion_move_to_position(end);
 }
 
-/* ==================== 动态参数配置函数 ==================== */
-
 void motion_set_max_velocity(float velocity)
 {
-    if (velocity > 0.0f && velocity <= PAN_MAX_VEL_CENTI) {
+    if (velocity > 0.0f && velocity <= PAN_MAX_VEL_CENTI)
+    {
         motion_profile.max_velocity = velocity;
     }
 }
 
 void motion_set_max_accel(float accel)
 {
-    if (accel > 0.0f && accel <= PAN_MAX_ACCEL_CENTI) {
+    if (accel > 0.0f && accel <= PAN_MAX_ACCEL_CENTI)
+    {
         motion_profile.max_accel = accel;
     }
 }
 
 void motion_set_pid_p(uint8_t axis, float p)
 {
-    if (p < 0) return;
-    
-    switch (axis) {
-        case AXIS_PAN:
-            pid_pan.kp = p;
-            break;
-        case AXIS_TILT:
-            pid_tilt.kp = p;
-            break;
-        case AXIS_RAIL:
-            pid_rail.kp = p;
-            break;
+    if (p < 0.0f) return;
+
+    switch (axis)
+    {
+        case AXIS_PAN: pid_pan.kp = p; break;
+        case AXIS_TILT: pid_tilt.kp = p; break;
+        case AXIS_RAIL: pid_rail.kp = p; break;
         case AXIS_ALL:
             pid_pan.kp = p;
             pid_tilt.kp = p;
             pid_rail.kp = p;
+            break;
+        default:
             break;
     }
 }
 
 void motion_set_pid_i(uint8_t axis, float i)
 {
-    if (i < 0) return;
-    
-    switch (axis) {
-        case AXIS_PAN:
-            pid_pan.ki = i;
-            break;
-        case AXIS_TILT:
-            pid_tilt.ki = i;
-            break;
-        case AXIS_RAIL:
-            pid_rail.ki = i;
-            break;
+    if (i < 0.0f) return;
+
+    switch (axis)
+    {
+        case AXIS_PAN: pid_pan.ki = i; break;
+        case AXIS_TILT: pid_tilt.ki = i; break;
+        case AXIS_RAIL: pid_rail.ki = i; break;
         case AXIS_ALL:
             pid_pan.ki = i;
             pid_tilt.ki = i;
             pid_rail.ki = i;
+            break;
+        default:
             break;
     }
 }
 
 void motion_set_pid_d(uint8_t axis, float d)
 {
-    if (d < 0) return;
-    
-    switch (axis) {
-        case AXIS_PAN:
-            pid_pan.kd = d;
-            break;
-        case AXIS_TILT:
-            pid_tilt.kd = d;
-            break;
-        case AXIS_RAIL:
-            pid_rail.kd = d;
-            break;
+    if (d < 0.0f) return;
+
+    switch (axis)
+    {
+        case AXIS_PAN: pid_pan.kd = d; break;
+        case AXIS_TILT: pid_tilt.kd = d; break;
+        case AXIS_RAIL: pid_rail.kd = d; break;
         case AXIS_ALL:
             pid_pan.kd = d;
             pid_tilt.kd = d;
             pid_rail.kd = d;
+            break;
+        default:
             break;
     }
 }
 
 void motion_set_limit_min(uint8_t axis, int32_t value)
 {
-    switch (axis) {
+    switch (axis)
+    {
         case AXIS_PAN:
             position_limits.pan_min = value;
             break;
@@ -759,13 +889,16 @@ void motion_set_limit_min(uint8_t axis, int32_t value)
             position_limits.pan_min = value;
             position_limits.tilt_min = value;
             position_limits.rail_min = value;
+            break;
+        default:
             break;
     }
 }
 
 void motion_set_limit_max(uint8_t axis, int32_t value)
 {
-    switch (axis) {
+    switch (axis)
+    {
         case AXIS_PAN:
             position_limits.pan_max = value;
             break;
@@ -779,44 +912,65 @@ void motion_set_limit_max(uint8_t axis, int32_t value)
             position_limits.pan_max = value;
             position_limits.tilt_max = value;
             position_limits.rail_max = value;
+            break;
+        default:
             break;
     }
 }
 
 void motion_set_velocity(uint8_t axis, float velocity)
 {
-    /* Velocity commands are in steps/s and keep the sign for direction. */
-    switch (axis) {
+    switch (axis)
+    {
         case AXIS_PAN:
-            velocity = clampf_value(velocity, -(float)PAN_MAX_SPEED_STEPS, (float)PAN_MAX_SPEED_STEPS);
-            scurve_pan.target_velocity = velocity;
+            servo_pan.velocity_cmd_cdeg_s = clampf_value(
+                servo_steps_to_centi_velocity(velocity),
+                -get_axis_velocity_limit(AXIS_PAN),
+                get_axis_velocity_limit(AXIS_PAN)
+            );
+            servo_pan.velocity_mode = fabsf(servo_pan.velocity_cmd_cdeg_s) >= 0.5f;
+            if (!servo_pan.velocity_mode)
+            {
+                servo_pan.target_cdeg = servo_pan.current_cdeg;
+            }
             break;
+
         case AXIS_TILT:
-            velocity = clampf_value(velocity, -(float)TILT_MAX_SPEED_STEPS, (float)TILT_MAX_SPEED_STEPS);
-            scurve_tilt.target_velocity = velocity;
+            servo_tilt.velocity_cmd_cdeg_s = clampf_value(
+                servo_steps_to_centi_velocity(velocity),
+                -get_axis_velocity_limit(AXIS_TILT),
+                get_axis_velocity_limit(AXIS_TILT)
+            );
+            servo_tilt.velocity_mode = fabsf(servo_tilt.velocity_cmd_cdeg_s) >= 0.5f;
+            if (!servo_tilt.velocity_mode)
+            {
+                servo_tilt.target_cdeg = servo_tilt.current_cdeg;
+            }
             break;
+
         case AXIS_RAIL:
             velocity = clampf_value(velocity, -(float)RAIL_MAX_SPEED_STEPS, (float)RAIL_MAX_SPEED_STEPS);
             scurve_rail.target_velocity = velocity;
             break;
+
         case AXIS_ALL:
-            scurve_pan.target_velocity = clampf_value(velocity, -(float)PAN_MAX_SPEED_STEPS, (float)PAN_MAX_SPEED_STEPS);
-            scurve_tilt.target_velocity = clampf_value(velocity, -(float)TILT_MAX_SPEED_STEPS, (float)TILT_MAX_SPEED_STEPS);
-            scurve_rail.target_velocity = clampf_value(velocity, -(float)RAIL_MAX_SPEED_STEPS, (float)RAIL_MAX_SPEED_STEPS);
-            break;
+            motion_set_velocity(AXIS_PAN, velocity);
+            motion_set_velocity(AXIS_TILT, velocity);
+            motion_set_velocity(AXIS_RAIL, velocity);
+            return;
+
         default:
             return;
     }
 
     is_moving = true;
-    stable_counter = 0;
+    stable_counter = 0U;
 }
 
 void motion_stop_all(void)
 {
-    /* 停止所有轴的运动 */
     is_moving = false;
-    stable_counter = 0;
+    stable_counter = 0U;
 
     stop_axis_state(AXIS_PAN);
     stop_axis_state(AXIS_TILT);

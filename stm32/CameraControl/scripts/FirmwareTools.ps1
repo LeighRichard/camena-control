@@ -227,15 +227,43 @@ function Split-LinkCommand {
     }
 }
 
-function Get-ToolchainBinDir {
-    param([string]$LinkCommand)
+function Get-CompilerPathFromMetadata {
+    param([pscustomobject]$Context)
 
-    $match = [regex]::Match($LinkCommand, '(?<compiler>[A-Za-z]:[^"]*arm-none-eabi-gcc\.exe)')
-    if (-not $match.Success) {
-        throw "unable to derive GNU toolchain path from link command"
+    $compilerMetadata = Get-ChildItem -Path (Join-Path $Context.BuildDir "CMakeFiles") -Recurse -Filter "CMakeCCompiler.cmake" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+
+    if ($null -eq $compilerMetadata) {
+        return $null
     }
 
-    return Split-Path -Parent $match.Groups["compiler"].Value
+    $match = Select-String -Path $compilerMetadata.FullName -Pattern 'set\(CMAKE_C_COMPILER "(.+)"\)' | Select-Object -First 1
+    if ($null -eq $match) {
+        return $null
+    }
+
+    return $match.Matches[0].Groups[1].Value
+}
+
+function Get-ToolchainBinDir {
+    param(
+        [string]$LinkCommand,
+        [pscustomobject]$Context
+    )
+
+    $match = [regex]::Match($LinkCommand, '(?<compiler>[A-Za-z]:[^"]*arm-none-eabi-gcc\.exe)')
+    if ($match.Success) {
+        return Split-Path -Parent $match.Groups["compiler"].Value
+    }
+
+    if ($null -ne $Context) {
+        $compilerPath = Get-CompilerPathFromMetadata -Context $Context
+        if (-not [string]::IsNullOrWhiteSpace($compilerPath)) {
+            return Split-Path -Parent $compilerPath
+        }
+    }
+
+    throw "unable to derive GNU toolchain path from link command or compiler metadata"
 }
 
 function Invoke-PrimaryBuild {
@@ -261,6 +289,18 @@ function Invoke-PrimaryBuild {
 
     if ($result.TimedOut) {
         Write-Warning "[build] Primary build timed out. Continuing with manual validation and link fallback."
+        return
+    }
+
+    $stdoutText = if ($null -ne $result.Stdout) { $result.Stdout.Trim() } else { "" }
+    $stderrText = if ($null -ne $result.Stderr) { $result.Stderr.Trim() } else { "" }
+    $redirectedNinjaFalseNegative = ($result.ExitCode -ne 0) -and (
+        $stdoutText -match "ninja: no work to do\." -or
+        $stdoutText -match "Generating HEX/BIN firmware artifacts"
+    ) -and [string]::IsNullOrWhiteSpace($stderrText)
+
+    if ($redirectedNinjaFalseNegative) {
+        Write-Warning "[build] Primary build returned a non-zero exit code under redirected execution, but Ninja reported a successful no-op/artifact step. Continuing."
         return
     }
 
@@ -318,7 +358,7 @@ function Invoke-ManualLink {
         Write-Warning "[link] Link command returned exit code $($result.ExitCode), but ELF was updated successfully. Continuing."
     }
 
-    return Get-ToolchainBinDir -LinkCommand $linkCommand
+    return Get-ToolchainBinDir -LinkCommand $linkCommand -Context $Context
 }
 
 function Invoke-FirmwareArtifacts {
@@ -407,7 +447,7 @@ function Invoke-FirmwareBuild {
         $toolchainBinDir = Invoke-ManualLink -Context $context -NinjaPath $ninjaPath -TimeoutSeconds $LinkTimeoutSeconds
     } else {
         $linkCommand = Get-LinkCommand -Context $context -NinjaPath $ninjaPath
-        $toolchainBinDir = Get-ToolchainBinDir -LinkCommand $linkCommand
+        $toolchainBinDir = Get-ToolchainBinDir -LinkCommand $linkCommand -Context $context
         Write-Host "[link] Existing ELF is newer than object files. Reusing current link output."
     }
 

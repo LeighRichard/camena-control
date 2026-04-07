@@ -118,18 +118,18 @@ class TestMotionValidator:
         valid, _ = MotionValidator.validate_position(0, 'pan')
         assert valid
         
-        valid, _ = MotionValidator.validate_position(180, 'pan')
+        valid, _ = MotionValidator.validate_position(135, 'pan')
         assert valid
         
-        valid, _ = MotionValidator.validate_position(-180, 'pan')
+        valid, _ = MotionValidator.validate_position(-135, 'pan')
         assert valid
         
         # 超出范围
-        valid, error = MotionValidator.validate_position(181, 'pan')
+        valid, error = MotionValidator.validate_position(136, 'pan')
         assert not valid
         assert 'Pan' in error
         
-        valid, error = MotionValidator.validate_position(-181, 'pan')
+        valid, error = MotionValidator.validate_position(-136, 'pan')
         assert not valid
     
     def test_validate_position_tilt(self):
@@ -138,14 +138,14 @@ class TestMotionValidator:
         valid, _ = MotionValidator.validate_position(0, 'tilt')
         assert valid
         
-        valid, _ = MotionValidator.validate_position(90, 'tilt')
+        valid, _ = MotionValidator.validate_position(110, 'tilt')
         assert valid
         
-        valid, _ = MotionValidator.validate_position(-90, 'tilt')
+        valid, _ = MotionValidator.validate_position(-110, 'tilt')
         assert valid
         
         # 超出范围
-        valid, error = MotionValidator.validate_position(91, 'tilt')
+        valid, error = MotionValidator.validate_position(111, 'tilt')
         assert not valid
         assert 'Tilt' in error
     
@@ -220,7 +220,7 @@ class TestMotionValidator:
         
         # 位置无效
         valid, error = MotionValidator.validate_motion_params(
-            position=200, speed=30, accel=15, axis='pan'
+            position=136, speed=30, accel=15, axis='pan'
         )
         assert not valid
         assert 'Pan' in error

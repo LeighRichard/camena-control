@@ -1,6 +1,6 @@
 /**
  * @file motion.h
- * @brief Motion control interface for the STM32 motor controller
+ * @brief Motion control interface for the STM32 hybrid controller
  */
 
 #ifndef __MOTION_H
@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Position uses 0.01 degree for pan/tilt and 0.01 mm for rail. */
+/* Position uses 0.01 degree for pan/tilt servo axes and 0.01 mm for the rail axis. */
 typedef struct {
     int32_t pan_angle;
     int32_t tilt_angle;

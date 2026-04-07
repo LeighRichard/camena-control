@@ -560,6 +560,19 @@ def create_app(config: Optional[WebConfig] = None):
             # 这样前端可以立即感知哪一轴下发失败。
             try:
                 from comm.protocol import Command, CommandType, AxisType
+                from comm.unit_converter import MotionValidator
+
+                requested_positions = (
+                    ("pan", pan),
+                    ("tilt", tilt),
+                    ("rail", rail),
+                )
+                for axis_name, value in requested_positions:
+                    if value is None:
+                        continue
+                    valid, error = MotionValidator.validate_position(float(value), axis_name)
+                    if not valid:
+                        return jsonify({"error": error}), 400
                 
                 # 根据提供的参数发送位置命令
                 # 注意：这里简化处理，实际应该分别发送三个轴的命令

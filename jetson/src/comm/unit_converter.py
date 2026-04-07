@@ -26,11 +26,11 @@ MAX_ACCEL_PAN_STEPS = 500    # Pan 轴最大加速度
 MAX_ACCEL_TILT_STEPS = 400   # Tilt 轴最大加速度
 MAX_ACCEL_RAIL_STEPS = 16000  # Rail 轴最大加速度
 
-# 运动范围限制
-PAN_MIN_ANGLE = -180.0
-PAN_MAX_ANGLE = 180.0
-TILT_MIN_ANGLE = -90.0
-TILT_MAX_ANGLE = 90.0
+# Hybrid STM firmware limits: pan/tilt now follow the PWM gimbal mechanical travel.
+PAN_MIN_ANGLE = -135.0
+PAN_MAX_ANGLE = 135.0
+TILT_MIN_ANGLE = -110.0
+TILT_MAX_ANGLE = 110.0
 RAIL_MIN_POS = 0.0
 RAIL_MAX_POS = 500.0
 

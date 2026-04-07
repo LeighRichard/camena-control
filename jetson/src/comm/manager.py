@@ -3,12 +3,14 @@ Jetson 侧串口通信管理器。
 """
 
 from collections import deque
+from glob import glob
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from .protocol import (
     AxisType,
@@ -45,7 +47,7 @@ class ConnectionState(Enum):
 class CommConfig:
     """串口通信配置。"""
 
-    port: str = "/dev/ttyUSB0"
+    port: str = "auto"
     baudrate: int = 115200
     timeout: float = 1.0
     retry_count: int = 3
@@ -88,6 +90,7 @@ class CommManager:
     def __init__(self, config: Optional[CommConfig] = None):
         self.config = config or CommConfig()
         self._serial = None
+        self._connected_port: Optional[str] = None
         self._lock = threading.Lock()
         self._running = False
         self._recv_thread: Optional[threading.Thread] = None
@@ -341,21 +344,143 @@ class CommManager:
         if callback in self._state_callbacks:
             self._state_callbacks.remove(callback)
 
+    @staticmethod
+    def _normalize_port_name(port: Optional[str]) -> str:
+        if port is None:
+            return ""
+        return str(port).strip()
+
+    @staticmethod
+    def _port_priority_key(candidate: Dict[str, str]) -> Tuple[int, str]:
+        text = " ".join(
+            str(candidate.get(field, "") or "").lower()
+            for field in ("device", "description", "manufacturer", "hwid")
+        )
+
+        priority = 0
+        if "stm" in text or "stmicro" in text:
+            priority += 100
+        if "virtual com" in text:
+            priority += 80
+        if "ttyacm" in text:
+            priority += 70
+        if "ttyusb" in text:
+            priority += 60
+        if "usb serial" in text:
+            priority += 50
+        if "cp210" in text or "ch340" in text or "ftdi" in text:
+            priority += 40
+
+        return (-priority, str(candidate.get("device", "")))
+
+    def _enumerate_serial_candidates(self) -> List[Dict[str, str]]:
+        candidates: List[Dict[str, str]] = []
+
+        try:
+            from serial.tools import list_ports
+
+            for info in list_ports.comports():
+                candidates.append(
+                    {
+                        "device": getattr(info, "device", "") or "",
+                        "description": getattr(info, "description", "") or "",
+                        "manufacturer": getattr(info, "manufacturer", "") or "",
+                        "hwid": getattr(info, "hwid", "") or "",
+                    }
+                )
+        except Exception as exc:
+            logger.debug("枚举串口失败: %s", exc)
+
+        if os.name != "nt":
+            known_devices = {item.get("device") for item in candidates if item.get("device")}
+            for pattern in ("/dev/ttyACM*", "/dev/ttyUSB*"):
+                for device in sorted(glob(pattern)):
+                    if device in known_devices:
+                        continue
+                    candidates.append(
+                        {
+                            "device": device,
+                            "description": "serial device",
+                            "manufacturer": "",
+                            "hwid": "",
+                        }
+                    )
+                    known_devices.add(device)
+
+        candidates.sort(key=self._port_priority_key)
+        return candidates
+
+    def _resolve_port_candidates(self) -> List[str]:
+        requested_port = self._normalize_port_name(self.config.port)
+        requested_is_auto = requested_port.lower() == "auto"
+
+        candidates: List[str] = []
+        seen = set()
+
+        def add_candidate(port_name: Optional[str]):
+            port_name = self._normalize_port_name(port_name)
+            if not port_name or port_name in seen:
+                return
+            seen.add(port_name)
+            candidates.append(port_name)
+
+        if requested_port and not requested_is_auto:
+            add_candidate(requested_port)
+
+        for info in self._enumerate_serial_candidates():
+            add_candidate(info.get("device"))
+
+        if requested_is_auto and not candidates:
+            logger.warning("comm.port=auto，但当前没有发现可用串口设备")
+
+        return candidates
+
+    def _open_serial_connection(self):
+        import serial
+
+        candidates = self._resolve_port_candidates()
+        if not candidates:
+            raise RuntimeError("未发现可用串口设备，请检查 STM32 连接或显式设置 comm.port")
+
+        errors = []
+        logger.info("串口候选列表: %s", ", ".join(candidates))
+
+        for port_name in candidates:
+            try:
+                serial_handle = serial.Serial(
+                    port=port_name,
+                    baudrate=self.config.baudrate,
+                    timeout=self.config.timeout,
+                )
+                if (
+                    self._normalize_port_name(self.config.port).lower() != "auto"
+                    and port_name != self.config.port
+                ):
+                    logger.info(
+                        "配置串口 %s 不可用，已自动切换到 %s",
+                        self.config.port,
+                        port_name,
+                    )
+                return serial_handle, port_name
+            except Exception as exc:
+                errors.append(f"{port_name}: {exc}")
+                logger.debug("串口打开失败 %s: %s", port_name, exc)
+
+        raise RuntimeError(" | ".join(errors))
+
+    def get_connected_port(self) -> Optional[str]:
+        return self._connected_port
+
     def connect(self) -> bool:
         self._set_state(ConnectionState.CONNECTING)
 
         try:
-            import serial
-
-            self._serial = serial.Serial(
-                port=self.config.port,
-                baudrate=self.config.baudrate,
-                timeout=self.config.timeout,
-            )
+            self._serial, self._connected_port = self._open_serial_connection()
             self._running = True
             self._reconnect_attempts = 0
             self._last_recv_time = time.time()
             self._set_state(ConnectionState.CONNECTED)
+            logger.info("串口已连接: %s", self._connected_port)
 
             if self.config.heartbeat_interval > 0:
                 self._start_heartbeat()
@@ -381,6 +506,7 @@ class CommManager:
         if self._serial:
             self._serial.close()
             self._serial = None
+        self._connected_port = None
 
         self._set_state(ConnectionState.DISCONNECTED, "手动断开")
 
@@ -413,17 +539,12 @@ class CommManager:
             logger.info("正在尝试重连（第 %s 次）...", self._reconnect_attempts)
 
             try:
-                import serial
-
-                self._serial = serial.Serial(
-                    port=self.config.port,
-                    baudrate=self.config.baudrate,
-                    timeout=self.config.timeout,
-                )
+                self._serial, self._connected_port = self._open_serial_connection()
                 self._running = True
                 self._reconnect_attempts = 0
                 self._last_recv_time = time.time()
                 self._set_state(ConnectionState.CONNECTED, "重连成功")
+                logger.info("串口重连成功: %s", self._connected_port)
 
                 if self.config.heartbeat_interval > 0:
                     self._start_heartbeat()
@@ -468,6 +589,7 @@ class CommManager:
             except Exception:
                 pass
             self._serial = None
+        self._connected_port = None
 
         self._set_state(ConnectionState.ERROR, reason)
         if self.config.auto_reconnect:

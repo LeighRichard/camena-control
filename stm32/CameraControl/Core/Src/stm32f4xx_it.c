@@ -43,13 +43,9 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 /* 步数计数器 (在 motion.c 中定义) */
-extern volatile int32_t pan_step_count;
-extern volatile int32_t tilt_step_count;
 extern volatile int32_t rail_step_count;
 
 /* 方向标志 - 使用 volatile 因为在中断中读取 GPIO */
-static volatile int8_t pan_direction = 1;
-static volatile int8_t tilt_direction = 1;
 static volatile int8_t rail_direction = 1;
 /* USER CODE END PV */
 
@@ -284,25 +280,12 @@ void DMA2_Stream7_IRQHandler(void)
 /* USER CODE BEGIN 1 */
 
 /**
- * @brief 定时器周期完成回调 - 用于步数计数
- * @note  使用 PeriodElapsedCallback 而非 PWM_PulseFinishedCallback
- *        因为 Update 中断已在 CubeMX 中启用
+ * @brief 定时器周期完成回调 - 仅 rail 轴用于步数计数
+ * @note  TIM1/TIM2 作为舵机 PWM 输出时不启用更新中断，只有 TIM3 rail 轴会进入这里。
  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  if (htim->Instance == TIM1)
-  {
-    /* Pan 轴步数计数 - 每个 PWM 周期计数一次 */
-    pan_direction = (HAL_GPIO_ReadPin(PAN_DIR_GPIO_Port, PAN_DIR_Pin) == GPIO_PIN_SET) ? 1 : -1;
-    pan_step_count += pan_direction;
-  }
-  else if (htim->Instance == TIM2)
-  {
-    /* Tilt 轴步数计数 */
-    tilt_direction = (HAL_GPIO_ReadPin(TILT_DIR_GPIO_Port, TILT_DIR_Pin) == GPIO_PIN_SET) ? 1 : -1;
-    tilt_step_count += tilt_direction;
-  }
-  else if (htim->Instance == TIM3)
+  if (htim->Instance == TIM3)
   {
     /* Rail 轴步数计数 */
     rail_direction = (HAL_GPIO_ReadPin(RAIL_DIR_GPIO_Port, RAIL_DIR_Pin) == GPIO_PIN_SET) ? 1 : -1;

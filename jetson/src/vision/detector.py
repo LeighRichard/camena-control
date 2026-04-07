@@ -1,7 +1,7 @@
 """
 目标检测器模块 - 使用深度学习进行农作物目标检测
 
-仅支持 YOLOv5/YOLOv8 + TensorRT 推理
+优先使用 YOLOv5/YOLOv8 + TensorRT 推理，在缺少 TensorRT 模型时自动回退到轻量级人脸检测。
 """
 
 from dataclasses import dataclass, field
@@ -158,12 +158,16 @@ class ObjectDetector:
         self._context = None
         self._stream = None
         self._bindings = None
+        self._opencv = None
+        self._opencv_cascade = None
+        self._face_recognition = None
         self._inference_engine = None
         self._target_counter = 0
         self._class_names = self.COCO_CLASSES.copy()
         self._is_loaded = False
         self._simulation_mode = False
         self._last_load_error = None
+        self._fallback_reason = None
     
     def load_model(self, model_path: str = None) -> Tuple[bool, str]:
         """
@@ -182,10 +186,14 @@ class ObjectDetector:
         self._context = None
         self._stream = None
         self._bindings = None
+        self._opencv = None
+        self._opencv_cascade = None
+        self._face_recognition = None
         self._inference_engine = None
         self._is_loaded = False
         self._simulation_mode = False
         self._last_load_error = None
+        self._fallback_reason = None
         
         if not self._config.model_path:
             # 启用模拟模式
@@ -193,26 +201,32 @@ class ObjectDetector:
             self._is_loaded = True
             logger.info("未指定模型路径，启用模拟模式")
             return True, ""
-        
-        if not os.path.exists(self._config.model_path):
-            return False, f"模型文件不存在: {self._config.model_path}"
-        
-        # 根据文件扩展名选择推理引擎
-        ext = os.path.splitext(self._config.model_path)[1].lower()
-        
-        # 仅支持 TensorRT
-        if ext in ['.engine', '.trt']:
-            if TENSORRT_AVAILABLE:
-                return self._load_tensorrt_model()
-            else:
-                self._simulation_mode = True
-                self._is_loaded = True
-                logger.warning("无可用的推理引擎，启用模拟模式")
-                return True, ""
 
+        primary_error = None
+
+        if not os.path.exists(self._config.model_path):
+            primary_error = f"模型文件不存在: {self._config.model_path}"
         else:
-            # 不支持的文件格式
-            return False, f"不支持的模型文件格式: {ext}，仅支持 .engine 或 .trt"
+            # 根据文件扩展名选择推理引擎
+            ext = os.path.splitext(self._config.model_path)[1].lower()
+
+            if ext in ['.engine', '.trt']:
+                if TENSORRT_AVAILABLE:
+                    success, message = self._load_tensorrt_model()
+                    if success:
+                        return True, ""
+                    primary_error = message or f"TensorRT 模型加载失败: {self._config.model_path}"
+                else:
+                    primary_error = "TensorRT 不可用"
+            else:
+                primary_error = f"不支持的模型文件格式: {ext}，仅支持 .engine 或 .trt"
+
+        fallback_success, fallback_message = self._load_fallback_detector(primary_error)
+        if fallback_success:
+            return True, fallback_message
+
+        self._last_load_error = fallback_message or primary_error
+        return False, self._last_load_error
     
     def _load_tensorrt_model(self) -> Tuple[bool, str]:
         """加载TensorRT模型"""
@@ -251,6 +265,73 @@ class ObjectDetector:
         except Exception as e:
             logger.error(f"加载TensorRT模型失败: {e}")
             return False, str(e)
+
+    def _load_fallback_detector(self, primary_error: Optional[str]) -> Tuple[bool, str]:
+        """在主模型不可用时加载轻量级检测后备。"""
+        success, message = self._load_opencv_haar_face_detector(primary_error)
+        if success:
+            return True, message
+
+        fallback_errors = [message] if message else []
+
+        success, message = self._load_face_recognition_detector(primary_error)
+        if success:
+            return True, message
+        if message:
+            fallback_errors.append(message)
+
+        combined_error = " | ".join(error for error in fallback_errors if error)
+        return False, combined_error or primary_error or "没有可用的检测后端"
+
+    def _load_opencv_haar_face_detector(self, primary_error: Optional[str]) -> Tuple[bool, str]:
+        try:
+            import cv2
+        except ImportError as exc:
+            return False, f"OpenCV 不可用: {exc}"
+
+        cascade_root = getattr(getattr(cv2, "data", None), "haarcascades", "")
+        cascade_path = os.path.join(cascade_root, "haarcascade_frontalface_default.xml")
+        if not cascade_path or not os.path.exists(cascade_path):
+            return False, f"OpenCV Haar Cascade 不存在: {cascade_path}"
+
+        cascade = cv2.CascadeClassifier(cascade_path)
+        if cascade.empty():
+            return False, f"OpenCV Haar Cascade 加载失败: {cascade_path}"
+
+        self._opencv = cv2
+        self._opencv_cascade = cascade
+        self._is_loaded = True
+        self._simulation_mode = False
+        self._inference_engine = "opencv-haar-face"
+        self._fallback_reason = primary_error
+        self._last_load_error = None
+
+        if primary_error:
+            logger.warning("主检测模型不可用（%s），已回退到 OpenCV Haar 人脸检测", primary_error)
+        else:
+            logger.info("已启用 OpenCV Haar 人脸检测")
+
+        return True, "opencv-haar-face"
+
+    def _load_face_recognition_detector(self, primary_error: Optional[str]) -> Tuple[bool, str]:
+        try:
+            import face_recognition as face_recognition_module
+        except ImportError as exc:
+            return False, f"face_recognition 不可用: {exc}"
+
+        self._face_recognition = face_recognition_module
+        self._is_loaded = True
+        self._simulation_mode = False
+        self._inference_engine = "face-recognition-hog"
+        self._fallback_reason = primary_error
+        self._last_load_error = None
+
+        if primary_error:
+            logger.warning("主检测模型不可用（%s），已回退到 face_recognition HOG 检测", primary_error)
+        else:
+            logger.info("已启用 face_recognition HOG 检测")
+
+        return True, "face-recognition-hog"
     
 
     def _allocate_buffers(self):
@@ -291,8 +372,12 @@ class ObjectDetector:
                 selected_target=None,
                 inference_time=0.0
             )
-        
-        start_time = time.time()
+
+        if self._inference_engine == "opencv-haar-face":
+            return self._detect_with_opencv_haar_face(image, depth)
+
+        if self._inference_engine == "face-recognition-hog":
+            return self._detect_with_face_recognition_hog(image, depth)
         
         # 预处理
         preprocess_start = time.time()
@@ -321,6 +406,164 @@ class ObjectDetector:
             inference_time=inference_time,
             preprocess_time=preprocess_time,
             postprocess_time=postprocess_time
+        )
+
+    def _matches_target_class_filter(self, class_name: str) -> bool:
+        if not self._config.target_classes:
+            return True
+
+        normalized = class_name.lower()
+        aliases = {
+            "face": {"face", "person", "person_face"},
+            "person": {"person", "face", "person_face"},
+        }
+        accepted_names = aliases.get(normalized, {normalized})
+        requested = {str(name).lower() for name in self._config.target_classes}
+        return not accepted_names.isdisjoint(requested)
+
+    def _build_target(
+        self,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        image_w: int,
+        image_h: int,
+        depth: Optional[np.ndarray],
+        confidence: float,
+        class_name: str,
+        class_id: int,
+    ) -> Optional[TargetInfo]:
+        if confidence < self._config.threshold or not self._matches_target_class_filter(class_name):
+            return None
+
+        center_x = x + w / 2.0
+        center_y = y + h / 2.0
+        distance = 0.0
+        if depth is not None:
+            distance = self._get_depth_smart(center_x, center_y, depth, image_w, image_h)
+
+        self._target_counter += 1
+        return TargetInfo(
+            id=self._target_counter,
+            center_x=center_x,
+            center_y=center_y,
+            distance=distance,
+            bounding_box=(int(x), int(y), int(w), int(h)),
+            confidence=float(confidence),
+            class_name=class_name,
+            class_id=class_id,
+        )
+
+    def _detect_with_opencv_haar_face(
+        self,
+        image: np.ndarray,
+        depth: np.ndarray = None,
+    ) -> DetectionResult:
+        if self._opencv is None or self._opencv_cascade is None:
+            return DetectionResult(targets=[], selected_target=None, inference_time=0.0)
+
+        preprocess_start = time.time()
+        if image.ndim == 3:
+            gray = self._opencv.cvtColor(image, self._opencv.COLOR_RGB2GRAY)
+        else:
+            gray = image
+        gray = self._opencv.equalizeHist(gray)
+        preprocess_time = (time.time() - preprocess_start) * 1000
+
+        inference_start = time.time()
+        faces = self._opencv_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(40, 40),
+        )
+        inference_time = (time.time() - inference_start) * 1000
+
+        postprocess_start = time.time()
+        image_h, image_w = image.shape[:2]
+        targets: List[TargetInfo] = []
+        for face in faces:
+            x, y, w, h = [int(value) for value in face]
+            target = self._build_target(
+                x=x,
+                y=y,
+                w=w,
+                h=h,
+                image_w=image_w,
+                image_h=image_h,
+                depth=depth,
+                confidence=0.9,
+                class_name="face",
+                class_id=0,
+            )
+            if target is not None:
+                targets.append(target)
+        postprocess_time = (time.time() - postprocess_start) * 1000
+
+        selected = self.select_target(targets, self._config.selection_strategy)
+        return DetectionResult(
+            targets=targets,
+            selected_target=selected,
+            inference_time=inference_time,
+            preprocess_time=preprocess_time,
+            postprocess_time=postprocess_time,
+        )
+
+    def _detect_with_face_recognition_hog(
+        self,
+        image: np.ndarray,
+        depth: np.ndarray = None,
+    ) -> DetectionResult:
+        if self._face_recognition is None:
+            return DetectionResult(targets=[], selected_target=None, inference_time=0.0)
+
+        preprocess_start = time.time()
+        scale = 0.5 if min(image.shape[:2]) >= 480 else 1.0
+        if scale < 1.0:
+            new_w = max(1, int(image.shape[1] * scale))
+            new_h = max(1, int(image.shape[0] * scale))
+            resized = self._resize_image(image, new_w, new_h)
+        else:
+            resized = image
+        preprocess_time = (time.time() - preprocess_start) * 1000
+
+        inference_start = time.time()
+        face_locations = self._face_recognition.face_locations(resized, model='hog')
+        inference_time = (time.time() - inference_start) * 1000
+
+        postprocess_start = time.time()
+        image_h, image_w = image.shape[:2]
+        inverse_scale = 1.0 / scale if scale > 0 else 1.0
+        targets: List[TargetInfo] = []
+        for top, right, bottom, left in face_locations:
+            x = int(left * inverse_scale)
+            y = int(top * inverse_scale)
+            w = int((right - left) * inverse_scale)
+            h = int((bottom - top) * inverse_scale)
+            target = self._build_target(
+                x=x,
+                y=y,
+                w=w,
+                h=h,
+                image_w=image_w,
+                image_h=image_h,
+                depth=depth,
+                confidence=0.85,
+                class_name="face",
+                class_id=0,
+            )
+            if target is not None:
+                targets.append(target)
+        postprocess_time = (time.time() - postprocess_start) * 1000
+
+        selected = self.select_target(targets, self._config.selection_strategy)
+        return DetectionResult(
+            targets=targets,
+            selected_target=selected,
+            inference_time=inference_time,
+            preprocess_time=preprocess_time,
+            postprocess_time=postprocess_time,
         )
     
     def _preprocess(self, image: np.ndarray) -> np.ndarray:
@@ -517,32 +760,24 @@ class ObjectDetector:
             # 类别过滤
             class_id = int(class_id)
             class_name = self._class_names[class_id] if class_id < len(self._class_names) else f"class_{class_id}"
-            
-            if self._config.target_classes and class_name not in self._config.target_classes:
+
+            if not self._matches_target_class_filter(class_name):
                 continue
-            
-            # 计算中心点
-            center_x = (x1 + x2) / 2
-            center_y = (y1 + y2) / 2
-            
-            # 获取深度（智能处理分辨率差异）
-            distance = 0.0
-            if depth is not None:
-                distance = self._get_depth_smart(center_x, center_y, depth, w, h)
-            
-            # 创建目标信息
-            self._target_counter += 1
-            target = TargetInfo(
-                id=self._target_counter,
-                center_x=center_x,
-                center_y=center_y,
-                distance=distance,
-                bounding_box=(int(x1), int(y1), int(x2 - x1), int(y2 - y1)),
+
+            target = self._build_target(
+                x=int(x1),
+                y=int(y1),
+                w=int(x2 - x1),
+                h=int(y2 - y1),
+                image_w=w,
+                image_h=h,
+                depth=depth,
                 confidence=float(conf),
                 class_name=class_name,
-                class_id=class_id
+                class_id=class_id,
             )
-            targets.append(target)
+            if target is not None:
+                targets.append(target)
         
         return targets
     
@@ -743,6 +978,14 @@ class ObjectDetector:
     def set_class_names(self, names: List[str]):
         """设置类别名称"""
         self._class_names = names
+
+    def set_target_class(self, class_name: Optional[str]):
+        """设置单一追踪类别。"""
+        self._config.target_classes = [class_name] if class_name else []
+
+    def set_target_classes(self, class_names: List[str]):
+        """设置多个追踪类别。"""
+        self._config.target_classes = list(class_names or [])
     
     def get_class_names(self) -> List[str]:
         """获取类别名称"""
@@ -766,9 +1009,14 @@ class ObjectDetector:
         self._context = None
         self._stream = None
         self._bindings = None
+        self._opencv = None
+        self._opencv_cascade = None
+        self._face_recognition = None
         self._inference_engine = None
         self._is_loaded = False
         self._simulation_mode = False
+        self._last_load_error = None
+        self._fallback_reason = None
     
     def get_inference_engine(self) -> Optional[str]:
         """获取当前使用的推理引擎"""
@@ -805,6 +1053,8 @@ class ObjectDetector:
             "model_path": model_path,
             "model_exists": model_exists,
             "last_error": last_error,
+            "fallback_active": bool(self._is_loaded and self._fallback_reason and not self._simulation_mode),
+            "fallback_reason": self._fallback_reason,
         }
     
     @staticmethod

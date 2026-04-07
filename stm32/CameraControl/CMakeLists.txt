@@ -31,6 +31,20 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
+get_filename_component(ARM_GNU_BIN_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
+find_program(ARM_NONE_EABI_OBJCOPY
+    NAMES arm-none-eabi-objcopy arm-none-eabi-objcopy.exe
+    HINTS "${ARM_GNU_BIN_DIR}"
+    REQUIRED
+    NO_DEFAULT_PATH
+)
+find_program(ARM_NONE_EABI_SIZE
+    NAMES arm-none-eabi-size arm-none-eabi-size.exe
+    HINTS "${ARM_GNU_BIN_DIR}"
+    REQUIRED
+    NO_DEFAULT_PATH
+)
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
@@ -76,10 +90,11 @@ set(FIRMWARE_BIN "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin")
 # project path contains spaces.
 add_custom_command(
     OUTPUT "${FIRMWARE_HEX}" "${FIRMWARE_BIN}"
-    COMMAND "${CMAKE_OBJCOPY}" -O ihex "${FIRMWARE_ELF}" "${FIRMWARE_HEX}"
-    COMMAND "${CMAKE_OBJCOPY}" -O binary "${FIRMWARE_ELF}" "${FIRMWARE_BIN}"
-    COMMAND "${CMAKE_SIZE}" "${FIRMWARE_ELF}"
+    COMMAND "${ARM_NONE_EABI_OBJCOPY}" -O ihex "${CMAKE_PROJECT_NAME}.elf" "${CMAKE_PROJECT_NAME}.hex"
+    COMMAND "${ARM_NONE_EABI_OBJCOPY}" -O binary "${CMAKE_PROJECT_NAME}.elf" "${CMAKE_PROJECT_NAME}.bin"
+    COMMAND "${ARM_NONE_EABI_SIZE}" "${CMAKE_PROJECT_NAME}.elf"
     DEPENDS ${CMAKE_PROJECT_NAME}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating HEX/BIN firmware artifacts"
     VERBATIM
 )

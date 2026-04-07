@@ -92,7 +92,7 @@ class CommConfig:
     """串口通信配置"""
     enabled: bool = True
     required: bool = False
-    port: str = "/dev/ttyUSB0"
+    port: str = "auto"
     baudrate: int = 115200
     timeout: float = 1.0
     trace_protocol: bool = False

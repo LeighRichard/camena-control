@@ -88,7 +88,7 @@ if PYDANTIC_AVAILABLE:
         """串口通信配置验证模型"""
         enabled: bool = True
         required: bool = False
-        port: str = "/dev/ttyUSB0"
+        port: str = "auto"
         baudrate: int = Field(default=115200, ge=9600, le=4000000)
         timeout: float = Field(default=1.0, ge=0.1, le=30.0)
         trace_protocol: bool = False
@@ -216,7 +216,7 @@ else:
     class CommConfigModel:
         enabled: bool = True
         required: bool = False
-        port: str = "/dev/ttyUSB0"
+        port: str = "auto"
         baudrate: int = 115200
         timeout: float = 1.0
         trace_protocol: bool = False
