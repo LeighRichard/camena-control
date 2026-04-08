@@ -191,7 +191,8 @@ class CommManager:
 
     @staticmethod
     def _format_frame_hex(frame: bytes) -> str:
-        return frame.hex(" ")
+        # Python 3.6 bytes.hex() does not support separator arguments.
+        return " ".join(f"{byte:02x}" for byte in frame)
 
     def _log_frame_trace(self, frame: bytes, source: str):
         if not self.config.trace_frames_hex:
